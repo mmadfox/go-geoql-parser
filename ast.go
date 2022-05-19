@@ -1,5 +1,7 @@
 package geoqlparser
 
+import "time"
+
 type Statement interface {
 	isStatement()
 }
@@ -7,9 +9,9 @@ type Statement interface {
 // Trigger represents a TRIGGER statement.
 type Trigger struct {
 	Vars   map[string]interface{}
-	When   int
-	Repeat int
-	Reset  int
+	When   Expr
+	Repeat Repeat
+	Reset  DurVal
 }
 
 func (t *Trigger) initVars() {
@@ -17,6 +19,11 @@ func (t *Trigger) initVars() {
 		return
 	}
 	t.Vars = make(map[string]interface{})
+}
+
+type Repeat struct {
+	V        int
+	Interval time.Duration
 }
 
 type Expr interface {

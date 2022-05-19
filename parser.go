@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 )
 
 func Parse(gql string) (Statement, error) {
@@ -13,8 +14,7 @@ func Parse(gql string) (Statement, error) {
 }
 
 type parser struct {
-	t           *Tokenizer
-	triggerStmt *Trigger
+	t *Tokenizer
 }
 
 func (s *parser) parse0() (stmt Statement, err error) {
@@ -35,6 +35,8 @@ func (s *parser) parseTriggerStmt() (stmt *Trigger, err error) {
 	}
 
 	stmt = new(Trigger)
+	stmt.Reset = DefaultResetVal
+	stmt.Repeat = DefaultRepeatVal
 	if tok == VARS {
 		if err = s.parseTriggerStmtVars(stmt); err != nil {
 			return nil, err
@@ -58,10 +60,45 @@ func (s *parser) parseTriggerStmt() (stmt *Trigger, err error) {
 		}
 		switch tok {
 		case REPEAT:
+			if err = s.parseTriggerStmtRepeat(stmt); err != nil {
+				return nil, err
+			}
 		case RESET:
+			if err = s.parseTriggerStmtReset(stmt); err != nil {
+				return nil, err
+			}
 		}
 	}
 	return stmt, nil
+}
+
+func (s *parser) parseTriggerStmtReset(stmt *Trigger) error {
+	tok, lit := s.t.Scan()
+	if tok != AFTER {
+		return fmt.Errorf("syntax error at position %s near 'RESET', expected 'RESET AFTER'",
+			s.t.errorPos())
+	}
+	buf := strings.Builder{}
+	for {
+		tok, lit = s.t.Scan()
+		if tok == EOF || tok == SEMICOLON {
+			break
+		}
+		buf.WriteString(lit)
+	}
+	dur, err := time.ParseDuration(buf.String())
+	if err != nil {
+		return fmt.Errorf("syntax error at position %s near 'RESET AFTER' %s",
+			s.t.errorPos(), err)
+	}
+	if dur.Seconds() > 0 {
+		stmt.Reset = DurVal{V: dur}
+	}
+	return nil
+}
+
+func (s *parser) parseTriggerStmtRepeat(stmt *Trigger) error {
+	return nil
 }
 
 func (s *parser) parseTriggerStmtVars(stmt *Trigger) error {

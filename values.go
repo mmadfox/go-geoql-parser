@@ -3,10 +3,20 @@ package geoqlparser
 import (
 	"strconv"
 	"strings"
+	"time"
+)
+
+var (
+	DefaultResetVal  = DurVal{V: 24 * time.Hour}
+	DefaultRepeatVal = Repeat{V: 3, Interval: 1 * time.Minute}
 )
 
 type StrVal struct {
 	V string
+}
+
+type DurVal struct {
+	V time.Duration
 }
 
 func toStringVal(lit string) (StrVal, error) {

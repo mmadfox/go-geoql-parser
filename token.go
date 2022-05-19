@@ -28,7 +28,8 @@ func NewTokenizer(r io.Reader) *Tokenizer {
 
 func (t *Tokenizer) errorPos() string {
 	pos := t.scanner.Pos()
-	return fmt.Sprintf("line:%d,column:%d,offset:%d", pos.Line, pos.Column, pos.Offset)
+	return fmt.Sprintf("line=%d,column=%d,offset=%d",
+		pos.Line, pos.Column, pos.Offset)
 }
 
 func (t *Tokenizer) next() (rune, string) {
