@@ -8,7 +8,7 @@ import (
 
 var (
 	DefaultResetVal  = DurVal{V: 24 * time.Hour}
-	DefaultRepeatVal = Repeat{V: 3, Interval: 1 * time.Minute}
+	DefaultRepeatVal = Repeat{V: 1}
 )
 
 type StrVal struct {

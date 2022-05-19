@@ -75,6 +75,8 @@ func (t *Tokenizer) Scan() (tok Token, lit string) {
 		tok = LBRACE
 	case '}':
 		tok = RBRACE
+	case '/':
+		tok = QUO
 	case '&':
 		nr, _ := t.next()
 		switch nr {

@@ -15,7 +15,6 @@ const (
 	RESET    // reset
 	AFTER    // after
 	INTERVAL // interval
-	EVERY    // every
 	TIMES    // times
 	AND      // and
 	OR       // or
@@ -25,8 +24,6 @@ const (
 	INT    // 1
 	FLOAT  // 1.1
 	STRING // "1"
-	ARRAY  // [1,2,3]
-	LIST   // (1,3,4)
 
 	ASSIGN    // =
 	SEMICOLON // ;
@@ -37,6 +34,7 @@ const (
 	LBRACK    // [
 	RBRACE    // }
 	LBRACE    // {
+	QUO       // /
 
 	GEQ  // >=
 	LEQ  // <=
@@ -58,7 +56,6 @@ var keywords = map[string]Token{
 	"after":    AFTER,
 	"interval": INTERVAL,
 	"times":    TIMES,
-	"every":    EVERY,
 
 	"=":   ASSIGN,
 	";":   SEMICOLON,
@@ -79,6 +76,7 @@ var keywords = map[string]Token{
 	"]":   RBRACK,
 	"{":   LBRACE,
 	"}":   RBRACE,
+	"/":   QUO,
 }
 
 var keywordStrings = map[Token]string{}

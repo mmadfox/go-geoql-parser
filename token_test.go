@@ -28,9 +28,9 @@ func TestTokenizer_Scan(t *testing.T) {
 			str:  "1 1.1 \"ok\"",
 		},
 		{
-			name: "ASSIGN,SEMICOLON,LPAREN,RPAREN,COMMA,LBRACK,RBRACK",
-			want: []Token{ASSIGN, SEMICOLON, LPAREN, RPAREN, COMMA, LBRACK, RBRACK},
-			str:  "= ; ( ) , [ ]",
+			name: "ASSIGN,SEMICOLON,LPAREN,RPAREN,COMMA,LBRACK,RBRACK,QUO",
+			want: []Token{ASSIGN, SEMICOLON, LPAREN, RPAREN, COMMA, LBRACK, RBRACK, QUO},
+			str:  "= ; ( ) , [ ] /",
 		},
 		{
 			name: "GEQ,LEQ,NEQ,GTR,LSS",
@@ -49,8 +49,8 @@ func TestTokenizer_Scan(t *testing.T) {
 		},
 		{
 			name: "REPEAT,EVERY,INT,UNUSED",
-			want: []Token{REPEAT, EVERY, INT, UNUSED},
-			str:  "repeat every 24H",
+			want: []Token{REPEAT, INT, UNUSED},
+			str:  "repeat  24H",
 		},
 		{
 			name: "REPEAT,INT,TIMES,INTERVAL,INT,UNUSED",

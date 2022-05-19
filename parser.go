@@ -98,7 +98,83 @@ func (s *parser) parseTriggerStmtReset(stmt *Trigger) error {
 }
 
 func (s *parser) parseTriggerStmtRepeat(stmt *Trigger) error {
+	tok, n := s.t.Scan()
+	if tok == EOF || tok == SEMICOLON {
+		return nil
+	}
+
+	switch tok {
+	default:
+		return fmt.Errorf("syntax error at position %s near 'REPEAT'",
+			s.t.errorPos())
+	case INT:
+	case UNUSED:
+		if n != "once" {
+			return fmt.Errorf("syntax error at position %s near 'REPEAT', got 'REPEAT %s', expected 'REPEAT once'",
+				s.t.errorPos(), n)
+		}
+		stmt.Repeat = Repeat{V: 1}
+		return nil
+	}
+
+	var short bool
+	tok, v := s.t.Scan()
+	switch tok {
+	default:
+		return fmt.Errorf("syntax error at position %s near 'REPEAT %s %s'",
+			s.t.errorPos(), n, v)
+	case TIMES:
+	case QUO:
+		short = true
+	}
+
+	nv, err := toIntVal(n)
+	if err != nil {
+		return err
+	}
+	stmt.Repeat.V = nv.V
+
+	if short {
+		dur, err := s.parseDurVal()
+		if err != nil {
+			return err
+		}
+		stmt.Repeat.Interval = dur.V
+		return nil
+	}
+
+	tok, _ = s.t.Scan()
+	if tok == EOF || tok == SEMICOLON {
+		return nil
+	}
+	if tok != INTERVAL {
+		return fmt.Errorf("syntax error at position %s near 'REPEAT %s %s'",
+			s.t.errorPos(), n, v)
+	}
+	dur, err := s.parseDurVal()
+	if err != nil {
+		return err
+	}
+	stmt.Repeat.Interval = dur.V
 	return nil
+}
+
+func (s *parser) parseDurVal() (v DurVal, err error) {
+	buf := strings.Builder{}
+	for {
+		tok, lit := s.t.Scan()
+		if tok == EOF || tok == SEMICOLON {
+			break
+		}
+		buf.WriteString(lit)
+	}
+	dur, err := time.ParseDuration(buf.String())
+	if err != nil {
+		return v, fmt.Errorf("syntax error at position %s near '%s'",
+			s.t.errorPos(), s.t.lit)
+	}
+	v.V = dur
+	return
 }
 
 func (s *parser) parseTriggerStmtVars(stmt *Trigger) error {

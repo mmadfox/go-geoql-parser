@@ -5,6 +5,82 @@ import (
 	"time"
 )
 
+func TestParseTriggerStmtRepeat(t *testing.T) {
+	testCases := []struct {
+		str  string
+		err  bool
+		want Repeat
+	}{
+		{
+			str:  "trigger when repeat once; reset after 1s;",
+			want: Repeat{V: 1},
+		},
+		{
+			str:  "trigger when repeat 1/5m", // short
+			want: Repeat{V: 1, Interval: 5 * time.Minute},
+		},
+		{
+			str:  "trigger when repeat 10 times interval 5s",
+			want: Repeat{V: 10, Interval: 5 * time.Second},
+		},
+		{
+			str:  "trigger when repeat 1 times",
+			want: Repeat{V: 1},
+		},
+		{
+			str: "trigger when repeat 1 times interval",
+			err: true,
+		},
+		{
+			str: "trigger when repeat 5.5 times",
+			err: true,
+		},
+		{
+			str: "trigger when repeat every",
+			err: true,
+		},
+		{
+			str:  "trigger when repeat;",
+			want: DefaultRepeatVal,
+		},
+		{
+			str: "trigger when repeat 1 hoho",
+			err: true,
+		},
+		{
+			str: "trigger when repeat 0x44 times",
+			err: true,
+		},
+		{
+			str: "trigger when repeat 1/34moi",
+			err: true,
+		},
+		{
+			str: "trigger when repeat 1 times someident",
+			err: true,
+		},
+	}
+	for i, tc := range testCases {
+		stmt, err := Parse(tc.str)
+		if tc.err {
+			if err == nil {
+				t.Fatalf("got nil, expected error")
+			} else {
+				continue
+			}
+		} else if !tc.err && err != nil {
+			t.Fatal(err)
+		}
+		trigger := stmt.(*Trigger)
+		if have, want := trigger.Repeat.V, tc.want.V; have != want {
+			t.Fatalf("%d. have %d, want %d repeat times", i, have, want)
+		}
+		if have, want := trigger.Repeat.Interval, tc.want.Interval; have != want {
+			t.Fatalf("%d. have %d, want %d repeat interval", i, have, want)
+		}
+	}
+}
+
 func TestParseTriggerStmtReset(t *testing.T) {
 	testCases := []struct {
 		str  string
