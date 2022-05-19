@@ -6,10 +6,17 @@ type Statement interface {
 
 // Trigger represents a TRIGGER statement.
 type Trigger struct {
-	Vars   map[string]*Variable
+	Vars   map[string]interface{}
 	When   int
 	Repeat int
 	Reset  int
+}
+
+func (t *Trigger) initVars() {
+	if t.Vars != nil {
+		return
+	}
+	t.Vars = make(map[string]interface{})
 }
 
 type Expr interface {
@@ -28,20 +35,4 @@ type ParenExpr struct {
 
 type ExprList []Expr
 
-type ValType int
-
-const (
-	StrVal = ValType(iota)
-	IntVal
-	FloatVal
-)
-
-type Val struct {
-	Type ValType
-	Data []byte
-}
-
-type Variable struct {
-	Ident string
-	Value *Val
-}
+func (t *Trigger) isStatement() {}

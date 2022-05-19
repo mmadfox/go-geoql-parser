@@ -1,6 +1,7 @@
 package geoqlparser
 
 import (
+	"fmt"
 	"io"
 	"strings"
 	"text/scanner"
@@ -23,6 +24,11 @@ func NewTokenizer(r io.Reader) *Tokenizer {
 	s.scanner.Mode = scanner.ScanIdents | scanner.ScanFloats | scanner.ScanStrings
 	s.scanner.Init(r)
 	return s
+}
+
+func (t *Tokenizer) errorPos() string {
+	pos := t.scanner.Pos()
+	return fmt.Sprintf("line:%d,column:%d,offset:%d", pos.Line, pos.Column, pos.Offset)
 }
 
 func (t *Tokenizer) next() (rune, string) {
@@ -64,6 +70,10 @@ func (t *Tokenizer) Scan() (tok Token, lit string) {
 		tok = RBRACK
 	case '[':
 		tok = LBRACK
+	case '{':
+		tok = LBRACE
+	case '}':
+		tok = RBRACE
 	case '&':
 		nr, _ := t.next()
 		switch nr {
@@ -121,8 +131,6 @@ func (t *Tokenizer) Scan() (tok Token, lit string) {
 			return
 		}
 		tok = keyword
-	default:
-		tok = ILLEGAL
 	}
 	return
 }

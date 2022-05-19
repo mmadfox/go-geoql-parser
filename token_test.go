@@ -15,7 +15,7 @@ func TestTokenizer_Scan(t *testing.T) {
 		{
 			name: "UNUSED",
 			want: []Token{UNUSED, UNUSED, UNUSED},
-			str:  "a b c",
+			str:  "a b c ~",
 		},
 		{
 			name: "TRIGGER,WHEN,VARS,REPEAT,RESET,AFTER",
@@ -56,6 +56,16 @@ func TestTokenizer_Scan(t *testing.T) {
 			name: "REPEAT,INT,TIMES,INTERVAL,INT,UNUSED",
 			want: []Token{REPEAT, INT, TIMES, INTERVAL, INT, UNUSED},
 			str:  "repeat 25 times interval 10s",
+		},
+		{
+			name: "ILLEGAL",
+			want: []Token{ILLEGAL, ILLEGAL, ILLEGAL},
+			str:  "!! |> &",
+		},
+		{
+			name: "ILLEGAL",
+			want: []Token{ILLEGAL},
+			str:  "&%",
 		},
 	}
 	for _, tc := range testCases {
