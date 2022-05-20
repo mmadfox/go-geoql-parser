@@ -8,17 +8,18 @@ const (
 	EOF
 
 	keywordsBegin
-	TRIGGER  // trigger
-	WHEN     // when
-	VARS     // vars
-	REPEAT   // repeat
-	RESET    // reset
-	AFTER    // after
-	INTERVAL // interval
-	TIMES    // times
-	AND      // and
-	OR       // or
-	NOT      // not
+	TRIGGER    // trigger
+	WHEN       // when
+	VARS       // vars
+	REPEAT     // repeat
+	RESET      // reset
+	AFTER      // after
+	INTERVAL   // interval
+	TIMES      // times
+	AND        // and
+	OR         // or
+	NOTBETWEEN // not between
+	BETWEEN    // between
 	keywordsEnd
 
 	INT    // 1
@@ -27,6 +28,7 @@ const (
 
 	ASSIGN    // =
 	SEMICOLON // ;
+	COLON     // :
 	LPAREN    // (
 	RPAREN    // )
 	COMMA     // ,
@@ -35,6 +37,7 @@ const (
 	RBRACE    // }
 	LBRACE    // {
 	QUO       // /
+	MUL       // *
 
 	GEQ  // >=
 	LEQ  // <=
@@ -44,7 +47,11 @@ const (
 	LAND // &&
 	LOR  // ||
 
-	SPEED // speed selector
+	selectorBegin
+	TRACKER // tracker
+	OBJECT  // object
+	SPEED   // speed
+	selectorEnd
 )
 
 var keywords = map[string]Token{
@@ -56,6 +63,9 @@ var keywords = map[string]Token{
 	"after":    AFTER,
 	"interval": INTERVAL,
 	"times":    TIMES,
+	"between":  BETWEEN,
+
+	"not between": NOTBETWEEN,
 
 	"=":   ASSIGN,
 	";":   SEMICOLON,
@@ -71,12 +81,17 @@ var keywords = map[string]Token{
 	"||":  LOR,
 	"or":  OR,
 	"and": AND,
-	"not": NOT,
 	"[":   LBRACK,
 	"]":   RBRACK,
 	"{":   LBRACE,
 	"}":   RBRACE,
 	"/":   QUO,
+	"*":   MUL,
+	":":   COLON,
+
+	"tracker": TRACKER,
+	"object":  OBJECT,
+	"speed":   SPEED,
 }
 
 var keywordStrings = map[Token]string{}
@@ -96,6 +111,10 @@ func KeywordString(id Token) string {
 		str = strings.ToUpper(str)
 	}
 	return str
+}
+
+func isSelector(tok Token) bool {
+	return tok >= selectorBegin && tok <= selectorEnd
 }
 
 func type2str(id Token) (str string) {

@@ -77,6 +77,8 @@ func (t *Tokenizer) Scan() (tok Token, lit string) {
 		tok = RBRACE
 	case '/':
 		tok = QUO
+	case '*':
+		tok = MUL
 	case '&':
 		nr, _ := t.next()
 		switch nr {
@@ -127,13 +129,33 @@ func (t *Tokenizer) Scan() (tok Token, lit string) {
 			tok = LSS
 			t.Reset()
 		}
+	case ':':
+		tok = COLON
 	case scanner.Ident:
-		keyword, found := keywords[lit]
+		var (
+			kwd   Token
+			found bool
+		)
+		switch lit {
+		case "not":
+			found = true
+			r, s = t.next()
+			lit = strings.ToLower(s)
+			switch lit {
+			default:
+				found = false
+			case "between":
+				kwd = NOTBETWEEN
+				lit = "not between"
+			}
+		default:
+			kwd, found = keywords[lit]
+		}
 		if !found {
 			tok = UNUSED
 			return
 		}
-		tok = keyword
+		tok = kwd
 	}
 	return
 }

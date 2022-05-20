@@ -1,6 +1,7 @@
 package geoqlparser
 
 import (
+	"errors"
 	"strconv"
 	"strings"
 	"time"
@@ -9,6 +10,7 @@ import (
 var (
 	DefaultResetVal  = DurVal{V: 24 * time.Hour}
 	DefaultRepeatVal = Repeat{V: 1}
+	DefaultRadiusVal = RadiusVal{V: 500, U: Meter}
 )
 
 type StrVal struct {
@@ -19,10 +21,86 @@ type DurVal struct {
 	V time.Duration
 }
 
+type RadiusUnit uint
+
+const (
+	Kilometer RadiusUnit = iota
+	Meter
+)
+
+type Qualifier int
+
+const (
+	All Qualifier = iota + 1
+	Any
+)
+
+type RadiusVal struct {
+	V uint
+	U RadiusUnit
+}
+
+var errInvalidRadius = errors.New("invalid radius")
+
+func toRadiusVal(lit string) (rv RadiusVal, err error) {
+	if len(lit) == 0 {
+		return rv, errInvalidRadius
+	}
+	if len(lit) > 12 {
+		return rv, errInvalidRadius
+	}
+	if lit == "0" {
+		return rv, nil
+	}
+	c := lit[0]
+	if c != 'r' && c != 'R' {
+		return rv, errInvalidRadius
+	}
+	lit = lit[1:]
+	n, lit, err := scanInt(lit)
+	if err != nil {
+		return rv, err
+	}
+	switch lit {
+	case "km", "KM":
+		rv.U = Kilometer
+	case "m", "M":
+		rv.U = Meter
+	default:
+		return rv, errInvalidRadius
+	}
+	rv.V = uint(n)
+	return rv, nil
+}
+
+var errBadIntVal = errors.New("invalid INT value")
+
+func scanInt(s string) (x uint64, rem string, err error) {
+	i := 0
+	for ; i < len(s); i++ {
+		c := s[i]
+		if c < '0' || c > '9' {
+			break
+		}
+		if x > 1<<63/10 {
+			return 0, "", errBadIntVal
+		}
+		x = x*10 + uint64(c) - '0'
+		if x > 1<<63 {
+			return 0, "", errBadIntVal
+		}
+	}
+	return x, s[i:], nil
+}
+
 func toStringVal(lit string) (StrVal, error) {
+	return StrVal{V: trim(lit)}, nil
+}
+
+func trim(lit string) string {
 	lit = strings.TrimLeft(lit, `"`)
 	lit = strings.TrimRight(lit, `"`)
-	return StrVal{V: lit}, nil
+	return lit
 }
 
 type IntVal struct {

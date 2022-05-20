@@ -38,8 +38,8 @@ func TestTokenizer_Scan(t *testing.T) {
 			str:  ">= <= != > <",
 		},
 		{
-			name: "LAND,AND,LOR,OR,NOT",
-			want: []Token{LAND, AND, LOR, OR, NOT},
+			name: "LAND,AND,LOR,OR",
+			want: []Token{LAND, AND, LOR, OR},
 			str:  "&& and || or not",
 		},
 		{
@@ -56,6 +56,11 @@ func TestTokenizer_Scan(t *testing.T) {
 			name: "REPEAT,INT,TIMES,INTERVAL,INT,UNUSED",
 			want: []Token{REPEAT, INT, TIMES, INTERVAL, INT, UNUSED},
 			str:  "repeat 25 times interval 10s",
+		},
+		{
+			name: "MUL, BETWEEN, NOTBETWEEN, COLON",
+			want: []Token{MUL, BETWEEN, NOTBETWEEN, COLON},
+			str:  "* between not between :",
 		},
 		{
 			name: "ILLEGAL",

@@ -23,7 +23,7 @@ func (s *parser) parse0() (stmt Statement, err error) {
 	case TRIGGER:
 		return s.parseTriggerStmt()
 	default:
-		err = s.toError(tok)
+		err = s.errorFromTok(tok)
 	}
 	return
 }
@@ -31,7 +31,7 @@ func (s *parser) parse0() (stmt Statement, err error) {
 func (s *parser) parseTriggerStmt() (stmt *Trigger, err error) {
 	tok, _ := s.t.Scan()
 	if tok != WHEN && tok != VARS {
-		return nil, s.toError(tok)
+		return nil, s.errorFromTok(tok)
 	}
 
 	stmt = new(Trigger)
@@ -43,13 +43,13 @@ func (s *parser) parseTriggerStmt() (stmt *Trigger, err error) {
 		}
 		tok, _ = s.t.Scan()
 		if tok != WHEN {
-			return nil, s.toError(tok)
+			return nil, s.errorFromTok(tok)
 		}
 	}
 
 	if tok == WHEN {
 		if err = s.parseTriggerStmtWhen(stmt); err != nil {
-			return nil, s.toError(tok)
+			return nil, s.errorFromTok(tok)
 		}
 	}
 
@@ -188,18 +188,18 @@ func (s *parser) parseTriggerStmtVars(stmt *Trigger) error {
 			break
 		}
 		if vnTok != UNUSED {
-			return s.toError(vnTok)
+			return s.errorFromTok(vnTok)
 		}
 		assignTok, _ := s.t.Scan()
 		if assignTok != ASSIGN {
-			return s.toError(assignTok)
+			return s.errorFromTok(assignTok)
 		}
 		valTok, valLit := s.t.Scan()
 		switch valTok {
 		case INT:
 			n, err := strconv.Atoi(valLit)
 			if err != nil {
-				return s.toError(valTok)
+				return s.errorFromTok(valTok)
 			}
 			stmt.initVars()
 			stmt.Vars[vnLit] = IntVal{V: n}
@@ -209,7 +209,7 @@ func (s *parser) parseTriggerStmtVars(stmt *Trigger) error {
 		case FLOAT:
 			n, err := strconv.ParseFloat(valLit, 64)
 			if err != nil {
-				return s.toError(valTok)
+				return s.errorFromTok(valTok)
 			}
 			stmt.initVars()
 			stmt.Vars[vnLit] = FloatVal{V: n}
@@ -234,7 +234,7 @@ func (s *parser) parseTriggerStmtVars(stmt *Trigger) error {
 				stmt.Vars[vnLit] = array
 			}
 		default:
-			return s.toError(valTok)
+			return s.errorFromTok(valTok)
 		}
 	}
 	return nil
@@ -271,7 +271,7 @@ func (s *parser) parseList() (interface{}, error) {
 			}
 			val, err := toIntVal(lit)
 			if err != nil {
-				return nil, s.toError(tok)
+				return nil, s.errorFromTok(tok)
 			}
 			if intVal == nil {
 				intVal = make(map[int]struct{})
@@ -287,7 +287,7 @@ func (s *parser) parseList() (interface{}, error) {
 			}
 			val, err := toStringVal(lit)
 			if err != nil {
-				return nil, s.toError(tok)
+				return nil, s.errorFromTok(tok)
 			}
 			if strVal == nil {
 				strVal = make(map[string]struct{})
@@ -303,7 +303,7 @@ func (s *parser) parseList() (interface{}, error) {
 			}
 			val, err := toFloatVal(lit)
 			if err != nil {
-				return nil, s.toError(tok)
+				return nil, s.errorFromTok(tok)
 			}
 			if floatVal == nil {
 				floatVal = make(map[float64]struct{})
@@ -364,7 +364,7 @@ func (s *parser) parseArray() (interface{}, error) {
 			}
 			val, err := toIntVal(lit)
 			if err != nil {
-				return nil, s.toError(tok)
+				return nil, s.errorFromTok(tok)
 			}
 			if intVal == nil {
 				intVal = make([]int, 0)
@@ -380,7 +380,7 @@ func (s *parser) parseArray() (interface{}, error) {
 			}
 			val, err := toStringVal(lit)
 			if err != nil {
-				return nil, s.toError(tok)
+				return nil, s.errorFromTok(tok)
 			}
 			if strVal == nil {
 				strVal = make([]string, 0)
@@ -396,7 +396,7 @@ func (s *parser) parseArray() (interface{}, error) {
 			}
 			val, err := toFloatVal(lit)
 			if err != nil {
-				return nil, s.toError(tok)
+				return nil, s.errorFromTok(tok)
 			}
 			if floatVal == nil {
 				floatVal = make([]float64, 0)
@@ -427,18 +427,191 @@ func (s *parser) parseArray() (interface{}, error) {
 }
 
 func (s *parser) parseTriggerStmtWhen(stmt *Trigger) error {
+	expr, err := s.parseWhen()
+	if err != nil {
+		return err
+	}
+	stmt.When = expr
 	return nil
 }
 
-func (s *parser) toError(tok Token) error {
+func (s *parser) parseWhen() (Expr, error) {
+	expr, err := s.parseExpr()
+	if err != nil {
+		return nil, err
+	}
+	return expr, nil
+}
+
+func (s *parser) parseExpr() (Expr, error) {
+	tok, _ := s.t.Scan()
+	if isSelector(tok) {
+		s.t.Reset()
+		if tok == TRACKER {
+			return s.parseTrackerSelector()
+		} else {
+			return s.parseBaseSelector()
+		}
+	}
+	if tok == MUL {
+		return &WildcardLit{}, nil
+	}
+	return nil, s.errorFromTok(tok)
+}
+
+func (s *parser) parseTrackerSelector() (Expr, error) {
+	tok, _ := s.t.Scan()
+	if !isSelector(tok) {
+		return nil, s.errorFromTok(tok)
+	}
+	expr := TrackerSelectorLit{Ident: tok, Radius: DefaultRadiusVal}
+	tok, _ = s.t.Scan()
+	// short form: tracker
+	if tok != LBRACE {
+		s.t.Reset()
+		expr.Wildcard = true
+		tok, lit := s.t.Scan()
+		if tok != COLON {
+			s.t.Reset()
+			return &expr, nil
+		}
+		// with radius
+		tok, lit = s.t.Scan()
+		if tok != UNUSED {
+			return nil, s.errorFromLit(lit)
+		}
+		radius, err := toRadiusVal(lit)
+		if err != nil {
+			return nil, err
+		}
+		expr.Radius = radius
+		return &expr, nil
+	}
+	// with args: {@var, *, "uuid"}
+	for {
+		tok, lit := s.t.Scan()
+		if tok == RBRACE || tok == EOF {
+			break
+		}
+		if tok == COMMA {
+			continue
+		}
+		// - with vars
+		if tok == ILLEGAL && lit == "@" {
+			if expr.Vars == nil {
+				expr.Vars = make(map[string]struct{})
+			}
+			tok, lit = s.t.Scan()
+			if tok != UNUSED {
+				return nil, s.errorFromLit(lit)
+			}
+			expr.Vars[lit] = struct{}{}
+		}
+		// - with identifier
+		if tok == STRING {
+			if expr.Args == nil {
+				expr.Args = make(map[string]struct{})
+			}
+			expr.Args[trim(lit)] = struct{}{}
+		}
+		// - with wildcard
+		if tok == MUL {
+			expr.Wildcard = true
+		}
+	}
+	// radius
+	tok, _ = s.t.Scan()
+	if tok != COLON {
+		s.t.Reset()
+	} else {
+		tok, lit := s.t.Scan()
+		if tok != UNUSED {
+			return nil, s.errorFromLit(lit)
+		}
+		radius, err := toRadiusVal(lit)
+		if err != nil {
+			return nil, err
+		}
+		expr.Radius = radius
+	}
+	return &expr, nil
+}
+
+func (s *parser) parseBaseSelector() (Expr, error) {
+	tok, _ := s.t.Scan()
+	if !isSelector(tok) {
+		return nil, s.errorFromTok(tok)
+	}
+	expr := BaseSelectorLit{Ident: tok, Qualifier: Any}
+	tok, _ = s.t.Scan()
+	// short form: speed,object,etc...
+	if tok != LBRACE {
+		s.t.Reset()
+		expr.Wildcard = true
+		return &expr, nil
+	}
+	// with args: {@var, *, "uuid"}
+	for {
+		tok, lit := s.t.Scan()
+		if tok == RBRACE || tok == EOF {
+			break
+		}
+		if tok == COMMA {
+			continue
+		}
+		// - with vars
+		if tok == ILLEGAL && lit == "@" {
+			if expr.Vars == nil {
+				expr.Vars = make(map[string]struct{})
+			}
+			tok, lit = s.t.Scan()
+			if tok != UNUSED {
+				return nil, s.errorFromLit(lit)
+			}
+			expr.Vars[lit] = struct{}{}
+		}
+		// - with identifier
+		if tok == STRING {
+			if expr.Args == nil {
+				expr.Args = make(map[string]struct{})
+			}
+			expr.Args[trim(lit)] = struct{}{}
+		}
+		// - with wildcard
+		if tok == MUL {
+			expr.Wildcard = true
+		}
+	}
+	// qualifier
+	tok, _ = s.t.Scan()
+	if tok != COLON {
+		s.t.Reset()
+	} else {
+		_, lit := s.t.Scan()
+		switch strings.ToLower(lit) {
+		default:
+			return nil, s.errorFromTok(tok)
+		case "any":
+			expr.Qualifier = Any
+		case "all":
+			expr.Qualifier = All
+		}
+	}
+	return &expr, nil
+}
+
+func (s *parser) errorFromLit(lit string) error {
+	return newError(s.t, "near"+" '"+lit+"'")
+}
+
+func (s *parser) errorFromTok(tok Token) error {
 	var lit string
 	if tok == UNUSED {
 		lit = s.t.lit
 	} else {
 		lit = KeywordString(tok)
 	}
-	return fmt.Errorf("syntax error at position %s near '%s'",
-		s.t.errorPos(), lit)
+	return newError(s.t, "near"+" '"+lit+"'")
 }
 
 func newParser(t *Tokenizer) *parser {

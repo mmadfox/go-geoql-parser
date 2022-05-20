@@ -6,6 +6,8 @@ type Statement interface {
 	isStatement()
 }
 
+func (t *Trigger) isStatement() {}
+
 // Trigger represents a TRIGGER statement.
 type Trigger struct {
 	Vars   map[string]interface{}
@@ -40,6 +42,32 @@ type ParenExpr struct {
 	Expr Expr
 }
 
+type WildcardLit struct {
+	Pos Pos
+}
+
+type BaseSelectorLit struct {
+	Ident     Token
+	Args      map[string]struct{}
+	Vars      map[string]struct{}
+	Qualifier Qualifier
+	Wildcard  bool
+	Pos       Pos
+}
+
+type TrackerSelectorLit struct {
+	Ident    Token
+	Args     map[string]struct{}
+	Vars     map[string]struct{}
+	Wildcard bool
+	Radius   RadiusVal
+	Pos      Pos
+}
+
 type ExprList []Expr
 
-func (t *Trigger) isStatement() {}
+func (n *BinaryExpr) isExpr()         {}
+func (n *ParenExpr) isExpr()          {}
+func (n *BaseSelectorLit) isExpr()    {}
+func (n *TrackerSelectorLit) isExpr() {}
+func (n *WildcardLit) isExpr()        {}

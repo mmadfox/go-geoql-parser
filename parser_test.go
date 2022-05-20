@@ -5,6 +5,31 @@ import (
 	"time"
 )
 
+func TestParseTriggerStmtWhen(t *testing.T) {
+	testCases := []struct {
+		str string
+		err bool
+	}{
+		{
+			str: "trigger when * tracker > 50",
+		},
+	}
+	for _, tc := range testCases {
+		stmt, err := Parse(tc.str)
+		if tc.err {
+			if err == nil {
+				t.Fatalf("got nil, expected error")
+			} else {
+				continue
+			}
+		} else if !tc.err && err != nil {
+			t.Fatal(err)
+		}
+		trigger := stmt.(*Trigger)
+		_ = trigger
+	}
+}
+
 func TestParseTriggerStmtRepeat(t *testing.T) {
 	testCases := []struct {
 		str  string
@@ -12,51 +37,51 @@ func TestParseTriggerStmtRepeat(t *testing.T) {
 		want Repeat
 	}{
 		{
-			str:  "trigger when repeat once; reset after 1s;",
+			str:  "trigger when * repeat once; reset after 1s;",
 			want: Repeat{V: 1},
 		},
 		{
-			str:  "trigger when repeat 1/5m", // short
+			str:  "trigger when * repeat 1/5m", // short
 			want: Repeat{V: 1, Interval: 5 * time.Minute},
 		},
 		{
-			str:  "trigger when repeat 10 times interval 5s",
+			str:  "trigger when * repeat 10 times interval 5s",
 			want: Repeat{V: 10, Interval: 5 * time.Second},
 		},
 		{
-			str:  "trigger when repeat 1 times",
+			str:  "trigger when * repeat 1 times",
 			want: Repeat{V: 1},
 		},
 		{
-			str: "trigger when repeat 1 times interval",
+			str: "trigger when * repeat 1 times interval",
 			err: true,
 		},
 		{
-			str: "trigger when repeat 5.5 times",
+			str: "trigger when * repeat 5.5 times",
 			err: true,
 		},
 		{
-			str: "trigger when repeat every",
+			str: "trigger when * repeat every",
 			err: true,
 		},
 		{
-			str:  "trigger when repeat;",
+			str:  "trigger when * repeat;",
 			want: DefaultRepeatVal,
 		},
 		{
-			str: "trigger when repeat 1 hoho",
+			str: "trigger when * repeat 1 hoho",
 			err: true,
 		},
 		{
-			str: "trigger when repeat 0x44 times",
+			str: "trigger when * repeat 0x44 times",
 			err: true,
 		},
 		{
-			str: "trigger when repeat 1/34moi",
+			str: "trigger when * repeat 1/34moi",
 			err: true,
 		},
 		{
-			str: "trigger when repeat 1 times someident",
+			str: "trigger when * repeat 1 times someident",
 			err: true,
 		},
 	}
@@ -88,15 +113,15 @@ func TestParseTriggerStmtReset(t *testing.T) {
 		want time.Duration
 	}{
 		{
-			str:  "trigger when reset after 1h",
+			str:  "trigger when * reset after 1h",
 			want: 1 * time.Hour,
 		},
 		{
-			str:  "trigger when reset after 5m",
+			str:  "trigger when * reset after 5m",
 			want: 5 * time.Minute,
 		},
 		{
-			str:  "trigger when reset after 400s",
+			str:  "trigger when * reset after 400s",
 			want: 400 * time.Second,
 		},
 		{
@@ -105,18 +130,18 @@ TRIGGER
 VARS
    a={1,2,3}
    b=[1,2,3]
-WHEN
+WHEN *
 RESET AFTER 24h;
 REPEAT
 `,
 			want: 24 * time.Hour,
 		},
 		{
-			str: "trigger when reset 1h",
+			str: "trigger when * reset 1h",
 			err: true,
 		},
 		{
-			str: "trigger when reset after 9MO",
+			str: "trigger when * reset after 9MO",
 			err: true,
 		},
 	}
@@ -145,7 +170,7 @@ func TestParseTriggerStmtFloatListVal(t *testing.T) {
 		want map[string]map[float64]struct{}
 	}{
 		{
-			str: "trigger vars a={1.1,2.2,3.3,3.3,5.5} when",
+			str: "trigger vars a={1.1,2.2,3.3,3.3,5.5} when *",
 			want: map[string]map[float64]struct{}{
 				"a": {
 					1.1: {}, 2.2: {}, 3.3: {}, 5.5: {},
@@ -194,7 +219,7 @@ func TestParseTriggerStmtIntListVal(t *testing.T) {
 		want map[string]map[int]struct{}
 	}{
 		{
-			str: "trigger vars a={1,2,3,3,5} when",
+			str: "trigger vars a={1,2,3,3,5} when *",
 			want: map[string]map[int]struct{}{
 				"a": {
 					1: {}, 2: {}, 3: {}, 5: {},
@@ -202,10 +227,10 @@ func TestParseTriggerStmtIntListVal(t *testing.T) {
 			},
 		},
 		{
-			str: "trigger vars a={} when",
+			str: "trigger vars a={} when *",
 		},
 		{
-			str: "trigger vars a={0x11} when",
+			str: "trigger vars a={0x11} when *",
 			err: true,
 		},
 	}
@@ -250,7 +275,7 @@ func TestParseTriggerStmtStringListVal(t *testing.T) {
 		want map[string]map[string]struct{}
 	}{
 		{
-			str: "trigger vars a={\"70c960f3-4b56-4d71-a04a-2c62a714f4af\", \"one\"} when",
+			str: "trigger vars a={\"70c960f3-4b56-4d71-a04a-2c62a714f4af\", \"one\"} when *",
 			want: map[string]map[string]struct{}{
 				"a": {
 					"70c960f3-4b56-4d71-a04a-2c62a714f4af": {},
@@ -259,7 +284,7 @@ func TestParseTriggerStmtStringListVal(t *testing.T) {
 			},
 		},
 		{
-			str: "trigger vars a={\"one\", \"two\",,,,} when",
+			str: "trigger vars a={\"one\", \"two\",,,,} when *",
 			want: map[string]map[string]struct{}{
 				"a": {
 					"one": {},
@@ -268,15 +293,15 @@ func TestParseTriggerStmtStringListVal(t *testing.T) {
 			},
 		},
 		{
-			str: "trigger vars a={\"one\", 1, \"two\"} when",
+			str: "trigger vars a={\"one\", 1, \"two\"} when *",
 			err: true,
 		},
 		{
-			str: "trigger vars a={1, \"two\"} when",
+			str: "trigger vars a={1, \"two\"} when *",
 			err: true,
 		},
 		{
-			str: "trigger vars a={1.1, \"one\", 1, \"two\"} when",
+			str: "trigger vars a={1.1, \"one\", 1, \"two\"} when *",
 			err: true,
 		},
 	}
