@@ -7,11 +7,7 @@ import (
 	"time"
 )
 
-var (
-	DefaultResetVal  = DurVal{V: 24 * time.Hour}
-	DefaultRepeatVal = Repeat{V: 1}
-	DefaultRadiusVal = RadiusVal{V: 500, U: Meter}
-)
+var DefaultRadiusVal = RadiusVal{V: 500, U: Meter}
 
 type StrVal struct {
 	V string

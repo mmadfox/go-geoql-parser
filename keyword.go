@@ -16,8 +16,6 @@ const (
 	AFTER      // after
 	INTERVAL   // interval
 	TIMES      // times
-	AND        // and
-	OR         // or
 	NOTBETWEEN // not between
 	BETWEEN    // between
 	keywordsEnd
@@ -39,6 +37,7 @@ const (
 	QUO       // /
 	MUL       // *
 
+	operatorBegin
 	GEQ  // >=
 	LEQ  // <=
 	NEQ  // !=
@@ -46,6 +45,9 @@ const (
 	LSS  // <
 	LAND // &&
 	LOR  // ||
+	AND  // and
+	OR   // or
+	operatorEnd
 
 	selectorBegin
 	TRACKER // tracker
@@ -115,6 +117,10 @@ func KeywordString(id Token) string {
 
 func isSelector(tok Token) bool {
 	return tok >= selectorBegin && tok <= selectorEnd
+}
+
+func isOperator(tok Token) bool {
+	return tok >= operatorBegin && tok <= operatorEnd
 }
 
 func type2str(id Token) (str string) {

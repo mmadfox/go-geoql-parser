@@ -45,6 +45,27 @@ func (t *Tokenizer) Reset() {
 	t.hop = 1
 }
 
+func (t *Tokenizer) ErrorCount() int {
+	return t.scanner.ErrorCount
+}
+
+func (t *Tokenizer) Offset() Pos {
+	return Pos(t.scanner.Offset)
+}
+
+func (t *Tokenizer) hasNextToken(tok Token) (ok bool) {
+	r := t.scanner.Peek()
+	switch r {
+	case '{':
+		ok = KeywordString(tok) == "{"
+	case '}':
+		ok = KeywordString(tok) == "}"
+	case ':':
+		ok = KeywordString(tok) == ":"
+	}
+	return
+}
+
 func (t *Tokenizer) Scan() (tok Token, lit string) {
 	r, s := t.next()
 	lit = strings.ToLower(s)
@@ -156,6 +177,22 @@ func (t *Tokenizer) Scan() (tok Token, lit string) {
 			return
 		}
 		tok = kwd
+	}
+	return
+}
+
+func (op Token) Precedence() (n int) {
+	switch op {
+	case LOR, OR:
+		n = 1
+	case LAND, AND:
+		n = 2
+	case NEQ, LSS, LEQ, GTR, GEQ:
+		n = 3
+		//default:
+		//	if isSelector(Op) {
+		//		n = 3
+		//	}
 	}
 	return
 }

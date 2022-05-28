@@ -1,6 +1,11 @@
 package geoqlparser
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
+
+var errSkipExpr = errors.New("skip expression")
 
 type Error struct {
 	Line   int

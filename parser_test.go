@@ -11,7 +11,7 @@ func TestParseTriggerStmtWhen(t *testing.T) {
 		err bool
 	}{
 		{
-			str: "trigger when * tracker > 50",
+			str: "trigger when ((tracker > 1) and (tracker < 300)) or (tracker > 1) and (tracker < 300)",
 		},
 	}
 	for _, tc := range testCases {
@@ -34,23 +34,23 @@ func TestParseTriggerStmtRepeat(t *testing.T) {
 	testCases := []struct {
 		str  string
 		err  bool
-		want Repeat
+		want *RepeatExpr
 	}{
 		{
 			str:  "trigger when * repeat once; reset after 1s;",
-			want: Repeat{V: 1},
+			want: &RepeatExpr{V: 1},
 		},
 		{
 			str:  "trigger when * repeat 1/5m", // short
-			want: Repeat{V: 1, Interval: 5 * time.Minute},
+			want: &RepeatExpr{V: 1, Interval: 5 * time.Minute},
 		},
 		{
 			str:  "trigger when * repeat 10 times interval 5s",
-			want: Repeat{V: 10, Interval: 5 * time.Second},
+			want: &RepeatExpr{V: 10, Interval: 5 * time.Second},
 		},
 		{
 			str:  "trigger when * repeat 1 times",
-			want: Repeat{V: 1},
+			want: &RepeatExpr{V: 1},
 		},
 		{
 			str: "trigger when * repeat 1 times interval",
@@ -65,8 +65,7 @@ func TestParseTriggerStmtRepeat(t *testing.T) {
 			err: true,
 		},
 		{
-			str:  "trigger when * repeat;",
-			want: DefaultRepeatVal,
+			str: "trigger when * repeat;",
 		},
 		{
 			str: "trigger when * repeat 1 hoho",
@@ -85,23 +84,26 @@ func TestParseTriggerStmtRepeat(t *testing.T) {
 			err: true,
 		},
 	}
-	for i, tc := range testCases {
+	for _, tc := range testCases {
 		stmt, err := Parse(tc.str)
 		if tc.err {
 			if err == nil {
-				t.Fatalf("got nil, expected error")
+				t.Fatalf("%s => got nil, expected error", tc.str)
 			} else {
 				continue
 			}
 		} else if !tc.err && err != nil {
-			t.Fatal(err)
+			t.Fatalf("%s => %v", tc.str, err)
+		}
+		if tc.want == nil {
+			continue
 		}
 		trigger := stmt.(*Trigger)
 		if have, want := trigger.Repeat.V, tc.want.V; have != want {
-			t.Fatalf("%d. have %d, want %d repeat times", i, have, want)
+			t.Fatalf("%s => have %d, want %d repeat times", tc.str, have, want)
 		}
 		if have, want := trigger.Repeat.Interval, tc.want.Interval; have != want {
-			t.Fatalf("%d. have %d, want %d repeat interval", i, have, want)
+			t.Fatalf("%s => have %d, want %d repeat interval", tc.str, have, want)
 		}
 	}
 }
@@ -128,8 +130,8 @@ func TestParseTriggerStmtReset(t *testing.T) {
 			str: `
 TRIGGER
 VARS
-   a={1,2,3}
-   b=[1,2,3]
+  a={1,2,3}
+  b=[1,2,3]
 WHEN *
 RESET AFTER 24h;
 REPEAT
@@ -157,8 +159,11 @@ REPEAT
 			t.Fatal(err)
 		}
 		trigger := stmt.(*Trigger)
-		if have, want := trigger.Reset.V, tc.want; have != want {
-			t.Fatalf("have %s, want %s", have, want)
+		if tc.want > 0 && trigger.Reset == nil {
+			t.Fatalf("%s => have nil, want ResetExpr", tc.str)
+		}
+		if have, want := trigger.Reset.Dur.V, tc.want; have != want {
+			t.Fatalf("%s => have %s, want %s", tc.str, have, want)
 		}
 	}
 }
