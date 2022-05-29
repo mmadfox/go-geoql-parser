@@ -66,6 +66,35 @@ func (t *Tokenizer) hasNextToken(tok Token) (ok bool) {
 	return
 }
 
+func (t *Tokenizer) scanNMEA() (tok Token, lit string, found bool) {
+	scanSemi := func() bool {
+		r, _ := t.next()
+		return r == ':'
+	}
+	if !scanSemi() {
+		return
+	}
+	ptyp, prefix := t.next()
+	if ptyp != scanner.Ident {
+		return
+	}
+	if !scanSemi() {
+		return
+	}
+	styp, ident := t.next()
+	if styp != scanner.Ident {
+		return
+	}
+	k := "nmea:" + prefix + ":" + ident
+	tt, ok := keywords[k]
+	if ok {
+		tok = tt
+		lit = k
+		found = true
+	}
+	return
+}
+
 func (t *Tokenizer) Scan() (tok Token, lit string) {
 	r, s := t.next()
 	lit = strings.ToLower(s)
@@ -158,6 +187,8 @@ func (t *Tokenizer) Scan() (tok Token, lit string) {
 			found bool
 		)
 		switch lit {
+		case "nmea":
+			kwd, lit, found = t.scanNMEA()
 		case "not":
 			found = true
 			r, s = t.next()
