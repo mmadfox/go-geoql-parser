@@ -11,6 +11,7 @@ const (
 	radiusTyp
 	booleanTyp
 	timeTyp
+	dateTyp
 )
 
 var opList = map[typ][]Token{
@@ -24,6 +25,32 @@ var opList = map[typ][]Token{
 }
 
 var kwdTypList = map[Token]typ{
+	IMEI:        stringTyp,
+	TYPE:        intTyp,
+	SPEED:       floatTyp,
+	DATE:        dateTyp,
+	TIME:        timeTyp,
+	COURSE:      floatTyp,
+	INPUT:       intTyp,
+	OUTPUT:      intTyp,
+	SATELLITES:  intTyp,
+	HDOP:        floatTyp,
+	ID:          intTyp,
+	INDEX:       intTyp,
+	COUNT:       intTyp,
+	BATTERY:     floatTyp,
+	ADC:         floatTyp,
+	ODOMETER:    intTyp,
+	MESSAGE:     stringTyp,
+	BRAND:       stringTyp,
+	TEMPERATURE: floatTyp,
+	EVENT:       intTyp,
+	STATUS:      intTyp,
+	VERSION:     intTyp,
+	DRIVER:      intTyp,
+	VALID:       booleanTyp,
+	POWER:       floatTyp,
+
 	NMEA_AAM_STATUS_ARRIVAL_CIRCLE_ENTERED: stringTyp,
 	NMEA_AAM_STATUS_PERPENDICULAR_PASSED:   stringTyp,
 	NMEA_AAM_ARRIVAL_CIRCLE_RADIUS:         floatTyp,

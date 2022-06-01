@@ -54,10 +54,34 @@ const (
 	selectorBegin
 	TRACKER // tracker - latitude, longitude, altitude
 	OBJECT  // object - reference to external objects
-	SPEED   // speed
 
-	// NMEA spec https://gpsd.gitlab.io/gpsd
+	IMEI        // imei
+	TYPE        // type
+	DATE        // date
+	TIME        // time
+	SPEED       // speed
+	COURSE      // course
+	BATTERY     // battery
+	COUNT       // count
+	INDEX       // index
+	ID          // id
+	HDOP        // hdop
+	SATELLITES  // satellites
+	INPUT       // input
+	OUTPUT      // output
+	ADC         // adc
+	ODOMETER    // odometer
+	MESSAGE     // message
+	BRAND       // brand
+	TEMPERATURE // temperature
+	EVENT       // event
+	STATUS      // status
+	VERSION     // version
+	POWER       // power
+	DRIVER      // driver
+	VALID       // valid
 
+	// * NMEA spec https://gpsd.gitlab.io/gpsd *
 	// NMEA AAM - Waypoint Arrival Alarm
 	NMEA_AAM_STATUS_ARRIVAL_CIRCLE_ENTERED // nmea:aam:statusArrivalCircleEntered
 	NMEA_AAM_STATUS_PERPENDICULAR_PASSED   // nmea:aam:statusPerpendicularPassed
@@ -603,9 +627,33 @@ var keywords = map[string]Token{
 	"*":   MUL,
 	":":   COLON,
 
-	"tracker": TRACKER,
-	"object":  OBJECT,
-	"speed":   SPEED,
+	"tracker":     TRACKER,
+	"object":      OBJECT,
+	"speed":       SPEED,
+	"imei":        IMEI,
+	"type":        TYPE,
+	"date":        DATE,
+	"time":        TIME,
+	"course":      COURSE,
+	"battery":     BATTERY,
+	"count":       COUNT,
+	"index":       INDEX,
+	"id":          ID,
+	"hdop":        HDOP,
+	"satellites":  SATELLITES,
+	"input":       INPUT,
+	"output":      OUTPUT,
+	"adc":         ADC,
+	"odometer":    ODOMETER,
+	"message":     MESSAGE,
+	"brand":       BRAND,
+	"temperature": TEMPERATURE,
+	"event":       EVENT,
+	"status":      STATUS,
+	"version":     VERSION,
+	"power":       POWER,
+	"driver":      DRIVER,
+	"valid":       VALID,
 
 	"nmea:aam:statusArrivalCircleEntered": NMEA_AAM_STATUS_ARRIVAL_CIRCLE_ENTERED,
 	"nmea:aam:statusPerpendicularPassed":  NMEA_AAM_STATUS_PERPENDICULAR_PASSED,
