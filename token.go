@@ -108,7 +108,15 @@ func (t *Tokenizer) Scan() (tok Token, lit string) {
 	case scanner.String:
 		tok = STRING
 	case '=':
-		tok = ASSIGN
+		nr, _ := t.next()
+		switch nr {
+		case '=':
+			tok = LEQL
+			lit = KeywordString(tok)
+		default:
+			tok = ASSIGN
+			t.Reset()
+		}
 	case ';':
 		tok = SEMICOLON
 	case ',':
@@ -153,7 +161,7 @@ func (t *Tokenizer) Scan() (tok Token, lit string) {
 		nr, _ := t.next()
 		switch nr {
 		case '=':
-			tok = NEQ
+			tok = LNEQ
 			lit = KeywordString(tok)
 		default:
 			tok = ILLEGAL
@@ -206,9 +214,15 @@ func (t *Tokenizer) Scan() (tok Token, lit string) {
 			switch lit {
 			default:
 				found = false
+			case "in":
+				kwd = NIN
+			case "eq":
+				kwd = NEQ
 			case "between":
 				kwd = NOTBETWEEN
-				lit = "not between"
+			}
+			if found {
+				lit = KeywordString(kwd)
 			}
 		default:
 			kwd, found = keywords[lit]

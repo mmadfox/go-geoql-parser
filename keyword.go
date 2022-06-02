@@ -8,16 +8,15 @@ const (
 	EOF
 
 	keywordsBegin
-	TRIGGER    // trigger
-	WHEN       // when
-	VARS       // vars
-	REPEAT     // repeat
-	RESET      // reset
-	AFTER      // after
-	INTERVAL   // interval
-	TIMES      // times
-	NOTBETWEEN // not between
-	BETWEEN    // between
+	TRIGGER  // trigger
+	WHEN     // when
+	VARS     // vars
+	REPEAT   // repeat
+	RESET    // reset
+	AFTER    // after
+	INTERVAL // interval
+	TIMES    // times
+
 	keywordsEnd
 
 	INT    // 1
@@ -38,17 +37,24 @@ const (
 	MUL       // *
 
 	operatorBegin
-	ISTRUE  // is up, is true
-	ISFALSE // is down, is false
-	GEQ     // >=
-	LEQ     // <=
-	NEQ     // !=
-	GTR     // >
-	LSS     // <
-	LAND    // &&
-	LOR     // ||
-	AND     // and
-	OR      // or
+	ISTRUE     // is up, is true
+	ISFALSE    // is down, is false
+	GEQ        // >=
+	LEQ        // <=
+	GTR        // >
+	LSS        // <
+	LAND       // &&
+	LOR        // ||
+	AND        // and
+	OR         // or
+	IN         // in
+	NIN        // not in
+	EQL        // eq
+	LEQL       // ==
+	NEQ        // not eq
+	LNEQ       // !=
+	NOTBETWEEN // not between
+	BETWEEN    // between
 	operatorEnd
 
 	selectorBegin
@@ -612,7 +618,6 @@ var keywords = map[string]Token{
 	",":   COMMA,
 	">=":  GEQ,
 	"<=":  LEQ,
-	"!=":  NEQ,
 	">":   GTR,
 	"<":   LSS,
 	"&&":  LAND,
@@ -626,6 +631,13 @@ var keywords = map[string]Token{
 	"/":   QUO,
 	"*":   MUL,
 	":":   COLON,
+
+	"eq":     EQL,
+	"==":     LEQL,
+	"not eq": NEQ,
+	"!=":     LNEQ,
+	"in":     IN,
+	"not in": NIN,
 
 	"tracker":     TRACKER,
 	"object":      OBJECT,
