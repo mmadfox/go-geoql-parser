@@ -742,6 +742,11 @@ func TestTokenizer_Scan(t *testing.T) {
 		str  string
 	}{
 		{
+			name: "ISTRUE, ISFALSE",
+			want: []Token{ISTRUE, COMMA, ISTRUE, COMMA, ISTRUE, COMMA, ISFALSE, COMMA, ISFALSE},
+			str:  "is true, is ok, is up, is down, is false",
+		},
+		{
 			name: "UNUSED",
 			want: []Token{UNUSED, UNUSED, UNUSED},
 			str:  "a b c ~",

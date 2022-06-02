@@ -187,6 +187,16 @@ func (t *Tokenizer) Scan() (tok Token, lit string) {
 			found bool
 		)
 		switch lit {
+		case "is":
+			_, l := t.next()
+			switch strings.ToLower(l) {
+			case "ok", "true", "up":
+				kwd = ISTRUE
+				found = true
+			case "false", "down":
+				kwd = ISFALSE
+				found = true
+			}
 		case "nmea":
 			kwd, lit, found = t.scanNMEA()
 		case "not":
@@ -220,10 +230,6 @@ func (op Token) Precedence() (n int) {
 		n = 2
 	case NEQ, LSS, LEQ, GTR, GEQ:
 		n = 3
-		//default:
-		//	if isSelector(Op) {
-		//		n = 3
-		//	}
 	}
 	return
 }
