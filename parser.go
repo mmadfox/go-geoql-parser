@@ -1,24 +1,29 @@
 package geoqlparser
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 	"time"
 )
 
 func Parse(gql string) (Statement, error) {
-	t := NewTokenizer(strings.NewReader(gql))
-	s := newParser(t)
+	r := strings.NewReader(gql)
+	t := NewTokenizer(r)
+	s := newParser(t, r)
 	return s.parse0()
 }
 
 type parser struct {
+	r   *strings.Reader
 	t   *Tokenizer
 	pos Pos
 	tok Token
 	lit string
 	err error
+	neg bool
 }
 
 func (s *parser) next() {
@@ -29,48 +34,45 @@ func (s *parser) next() {
 func (s *parser) parse0() (stmt Statement, err error) {
 	s.next()
 	switch s.tok {
-	case TRIGGER:
+	case TRIGGER, WHEN:
+		if s.except(TRIGGER) {
+			s.next()
+		}
 		return s.parseTriggerStmt()
 	default:
-		err = s.syntaxError(nil)
+		s.t.Offset()
+		err = s.error()
 	}
 	return
 }
 
-func (s *parser) parseTriggerStmt() (stmt *Trigger, err error) {
-	s.next()
-	if !s.except(WHEN, VARS) {
-		return nil, s.syntaxError(nil)
+func (s *parser) parseTriggerStmt() (stmt *TriggerStmt, err error) {
+	if !s.except(WHEN, SET) {
+		return nil, s.error()
 	}
-	stmt = new(Trigger)
-	if s.except(VARS) {
-		if err = s.parseTriggerStmtVars(stmt); err != nil {
+	stmt = new(TriggerStmt)
+	if s.except(SET) {
+		if err = s.parseSet(stmt); err != nil {
 			return nil, err
 		}
 		s.next()
 		if !s.except(WHEN) {
-			return nil, s.syntaxError(nil)
+			return nil, s.error()
 		}
 	}
 	if s.except(WHEN) {
-		if err = s.parseTriggerStmtWhen(stmt); err != nil {
-			return nil, s.syntaxError(nil)
+		if err = s.parseWhen(stmt); err != nil {
+			return nil, err
 		}
 	}
-	for i := 0; i < 3; i++ {
-		s.next()
-		if s.except(EOF) {
-			break
+	if s.except(REPEAT) {
+		if err = s.parseRepeat(stmt); err != nil {
+			return nil, err
 		}
-		switch s.tok {
-		case REPEAT:
-			if err = s.parseTriggerStmtRepeat(stmt); err != nil {
-				return nil, err
-			}
-		case RESET:
-			if err = s.parseTriggerStmtReset(stmt); err != nil {
-				return nil, err
-			}
+	}
+	if s.except(RESET) {
+		if err = s.parseReset(stmt); err != nil {
+			return nil, err
 		}
 	}
 	stmt.Pos = s.t.Offset()
@@ -86,348 +88,109 @@ func (s *parser) except(in ...Token) bool {
 	return false
 }
 
-func (s *parser) parseTriggerStmtReset(stmt *Trigger) error {
+func (s *parser) parseReset(stmt *TriggerStmt) (err error) {
 	s.next()
-	if !s.except(AFTER) {
-		return s.syntaxError(nil)
-	}
-	buf := strings.Builder{}
-	for {
-		s.next()
-		if s.except(EOF, SEMICOLON) {
-			break
-		}
-		buf.WriteString(s.lit)
-	}
-	dur, err := time.ParseDuration(buf.String())
-	if err != nil {
-		return s.syntaxError(err)
-	}
-	if dur.Seconds() > 0 {
-		stmt.Reset = &ResetExpr{Dur: DurVal{V: dur}, Pos: s.t.Offset()}
-	}
-	return nil
-}
-
-func (s *parser) parseTriggerStmtRepeat(stmt *Trigger) error {
 	s.next()
-	if s.except(EOF, SEMICOLON) {
-		return nil
-	}
+	var dur Expr
 	switch s.tok {
-	default:
-		return s.syntaxError(nil)
 	case INT:
-	case UNUSED:
-		if s.lit != "once" {
-			return s.syntaxError(nil)
-		}
-		stmt.Repeat = &RepeatExpr{V: 1, Pos: s.t.Offset()}
-		return nil
+		dur, err = s.parseIntTypes()
+	case FLOAT:
+		dur, err = s.parseFloatTypes()
 	}
-	nv, err := toIntVal(s.lit)
 	if err != nil {
 		return err
 	}
-	var short bool
-	s.next()
-	switch s.tok {
-	default:
-		return s.syntaxError(nil)
-	case TIMES:
-	case QUO:
-		short = true
+	_, ok := dur.(*DurationLit)
+	if !ok {
+		return s.error()
 	}
-	stmt.Repeat = &RepeatExpr{V: nv.V}
-	if short {
-		dur, err := s.parseDurVal()
-		if err != nil {
-			return err
-		}
-		stmt.Repeat.Interval = dur.V
-		stmt.Repeat.Pos = s.t.Offset()
-		return nil
-	}
-	s.next()
-	if s.except(EOF, SEMICOLON) {
-		return nil
-	}
-	if !s.except(INTERVAL) {
-		return s.syntaxError(nil)
-	}
-	dur, err := s.parseDurVal()
-	if err != nil {
-		return err
-	}
-	stmt.Repeat.Interval = dur.V
-	return nil
-}
-
-func (s *parser) parseDurVal() (v DurVal, err error) {
-	buf := strings.Builder{}
-	for {
-		s.next()
-		if s.except(EOF, SEMICOLON) {
-			break
-		}
-		buf.WriteString(s.lit)
-	}
-	dur, err := time.ParseDuration(buf.String())
-	if err != nil {
-		return v, s.syntaxError(err)
-	}
-	v.V = dur
+	stmt.ResetAfter = dur
 	return
 }
 
-func (s *parser) parseTriggerStmtVars(stmt *Trigger) error {
+func (s *parser) parseRepeat(stmt *TriggerStmt) (err error) {
+	s.next()
+	if !s.except(INT) {
+		return s.error()
+	}
+	intVal, err := s.parseIntTypes()
+	if err != nil {
+		return err
+	}
+	iiv, ok := intVal.(*IntLit)
+	if !ok {
+		return s.error()
+	}
+	if iiv.Val < 2 {
+		return s.error()
+	}
+	if s.lit != "times" {
+		s.err = fmt.Errorf("got %s, expected times", s.lit)
+		return s.error()
+	}
+	s.next()
+	dur, err := s.parseIntTypes()
+	if err != nil {
+		return err
+	}
+	if s.lit != "interval" {
+		s.err = fmt.Errorf("got %s, expected interval", s.lit)
+		return s.error()
+	}
+	_, ok = dur.(*DurationLit)
+	if !ok {
+		return s.error()
+	}
+	s.next()
+	stmt.RepeatInterval = dur
+	stmt.RepeatCount = intVal
+	return
+}
+
+func (s *parser) parseSet(stmt *TriggerStmt) error {
+	var varname string
+	s.next()
 	for {
-		vnTok, vnLit := s.t.Scan()
-		if vnTok == EOF {
+		if s.except(EOF) {
 			break
 		}
-		if vnTok == WHEN {
+		if s.except(WHEN) {
 			s.t.Reset()
 			break
 		}
-		if vnTok != UNUSED {
-			return s.errorFromTok(vnTok)
+		varname = s.t.TokenText()
+		s.t.Unwind()
+		s.next()
+		if !s.except(ASSIGN) {
+			return s.error()
 		}
-		assignTok, _ := s.t.Scan()
-		if assignTok != ASSIGN {
-			return s.errorFromTok(assignTok)
+		expr, err := s.parseUnaryExpr()
+		if err != nil {
+			return err
 		}
-		valTok, valLit := s.t.Scan()
-		switch valTok {
-		case INT:
-			n, err := strconv.Atoi(valLit)
-			if err != nil {
-				return s.errorFromTok(valTok)
+		switch typ := expr.(type) {
+		case *VarLit:
+			return s.error()
+		case *ArrayExpr:
+			if typ.Kind == IDENT {
+				return s.error()
 			}
-			stmt.initVars()
-			stmt.Vars[vnLit] = IntVal{V: n}
-		case STRING:
-			stmt.initVars()
-			stmt.Vars[vnLit] = StrVal{V: valLit}
-		case FLOAT:
-			n, err := strconv.ParseFloat(valLit, 64)
-			if err != nil {
-				return s.errorFromTok(valTok)
-			}
-			stmt.initVars()
-			stmt.Vars[vnLit] = FloatVal{V: n}
-		case LBRACE:
-			s.t.Reset()
-			list, err := s.parseList()
-			if err != nil {
-				return err
-			}
-			if list != nil {
-				stmt.initVars()
-				stmt.Vars[vnLit] = list
-			}
-		case LBRACK:
-			s.t.Reset()
-			array, err := s.parseArray()
-			if err != nil {
-				return err
-			}
-			if array != nil {
-				stmt.initVars()
-				stmt.Vars[vnLit] = array
-			}
-		default:
-			return s.errorFromTok(valTok)
 		}
+		stmt.initVars()
+		_, found := stmt.Set[varname]
+		if found {
+			s.err = fmt.Errorf("variable %s already exists", varname)
+			return s.error()
+		}
+		stmt.Set[varname] = expr
 	}
 	return nil
 }
 
-func (s *parser) parseList() (interface{}, error) {
-	var (
-		index    int
-		typ      Token
-		intVal   map[int]struct{}
-		strVal   map[string]struct{}
-		floatVal map[float64]struct{}
-	)
-
-	for {
-		s.next()
-		if s.except(LBRACE, COMMA) {
-			continue
-		}
-		if s.except(RBRACE, EOF) {
-			break
-		}
-		switch s.tok {
-		default:
-			return nil, s.syntaxError(nil)
-		case INT:
-			if index == 0 {
-				typ = INT
-			}
-			if index > 0 && typ != INT {
-				return nil, s.syntaxError(nil)
-			}
-			val, err := toIntVal(s.lit)
-			if err != nil {
-				return nil, s.syntaxError(nil)
-			}
-			if intVal == nil {
-				intVal = make(map[int]struct{})
-			}
-			intVal[val.V] = struct{}{}
-		case STRING:
-			if index == 0 {
-				typ = STRING
-			}
-			if index > 0 && typ != STRING {
-				return nil, s.syntaxError(nil)
-			}
-			val, err := toStringVal(s.lit)
-			if err != nil {
-				return nil, s.syntaxError(nil)
-			}
-			if strVal == nil {
-				strVal = make(map[string]struct{})
-			}
-			strVal[val.V] = struct{}{}
-		case FLOAT:
-			if index == 0 {
-				typ = FLOAT
-			}
-			if index > 0 && typ != FLOAT {
-				return nil, s.syntaxError(nil)
-			}
-			val, err := toFloatVal(s.lit)
-			if err != nil {
-				return nil, s.syntaxError(nil)
-			}
-			if floatVal == nil {
-				floatVal = make(map[float64]struct{})
-			}
-			floatVal[val.V] = struct{}{}
-		}
-		index++
-	}
-	switch typ {
-	case INT:
-		if intVal == nil {
-			return nil, nil
-		}
-		return ListIntVal{V: intVal}, nil
-	case FLOAT:
-		if floatVal == nil {
-			return nil, nil
-		}
-		return ListFloatVal{V: floatVal}, nil
-	case STRING:
-		if strVal == nil {
-			return nil, nil
-		}
-		return ListStringVal{V: strVal}, nil
-	default:
-		return nil, nil
-	}
-}
-
-func (s *parser) parseArray() (interface{}, error) {
-	var (
-		index    int
-		typ      Token
-		intVal   []int
-		strVal   []string
-		floatVal []float64
-	)
-
-	for {
-		tok, lit := s.t.Scan()
-		if tok == LBRACK || tok == COMMA {
-			continue
-		}
-		if tok == RBRACK || tok == EOF {
-			break
-		}
-		switch tok {
-		default:
-			return nil, fmt.Errorf("syntax error at position %s near '%s'",
-				s.t.errorPos(), lit)
-		case INT:
-			if index == 0 {
-				typ = INT
-			}
-			if index > 0 && typ != INT {
-				return nil, fmt.Errorf("syntax error at position %s near '%s', got INTVAL, expected %s",
-					s.t.errorPos(), lit, type2str(typ))
-			}
-			val, err := toIntVal(lit)
-			if err != nil {
-				return nil, s.errorFromTok(tok)
-			}
-			if intVal == nil {
-				intVal = make([]int, 0)
-			}
-			intVal = append(intVal, val.V)
-		case STRING:
-			if index == 0 {
-				typ = STRING
-			}
-			if index > 0 && typ != STRING {
-				return nil, fmt.Errorf("syntax error at position %s near '%s', got STRINGVAL, expected %s",
-					s.t.errorPos(), lit, type2str(typ))
-			}
-			val, err := toStringVal(lit)
-			if err != nil {
-				return nil, s.errorFromTok(tok)
-			}
-			if strVal == nil {
-				strVal = make([]string, 0)
-			}
-			strVal = append(strVal, val.V)
-		case FLOAT:
-			if index == 0 {
-				typ = FLOAT
-			}
-			if index > 0 && typ != FLOAT {
-				return nil, fmt.Errorf("syntax error at position %s near '%s', got FLOATVAL, expected %s",
-					s.t.errorPos(), lit, type2str(typ))
-			}
-			val, err := toFloatVal(lit)
-			if err != nil {
-				return nil, s.errorFromTok(tok)
-			}
-			if floatVal == nil {
-				floatVal = make([]float64, 0)
-			}
-			floatVal = append(floatVal, val.V)
-		}
-		index++
-	}
-	switch typ {
-	case INT:
-		if intVal == nil {
-			return nil, nil
-		}
-		return ArrayIntVal{V: intVal}, nil
-	case FLOAT:
-		if floatVal == nil {
-			return nil, nil
-		}
-		return ArrayFloatVal{V: floatVal}, nil
-	case STRING:
-		if strVal == nil {
-			return nil, nil
-		}
-		return ArrayStringVal{V: strVal}, nil
-	default:
-		return nil, nil
-	}
-}
-
-func (s *parser) parseTriggerStmtWhen(stmt *Trigger) error {
+func (s *parser) parseWhen(stmt *TriggerStmt) error {
 	if !s.except(WHEN) {
-		return s.syntaxError(nil)
+		return s.error()
 	}
 	expr, err := s.parseBinaryExpr(1)
 	if err != nil {
@@ -438,28 +201,17 @@ func (s *parser) parseTriggerStmtWhen(stmt *Trigger) error {
 }
 
 func (s *parser) parseBinaryExpr(oprec0 int) (Expr, error) {
-	s.next()
 	left, err := s.parseUnaryExpr()
 	if err != nil {
-		// short form: [trigger when * ...].
-		// mostly for tests.
-		if err == errSkipExpr && oprec0 == 1 {
-			return left, nil
-		}
 		return nil, err
 	}
-	s.next()
 	if s.except(EOF) || s.except(RPAREN) {
 		return left, nil
-	}
-	if !isOperator(s.tok) {
-		return nil, s.syntaxError(nil)
 	}
 	for {
 		if s.except(RPAREN) {
 			return left, nil
 		}
-
 		op, oprec, pos := s.tok, s.tok.Precedence(), s.t.Offset()
 		if oprec < oprec0 {
 			return left, nil
@@ -469,241 +221,740 @@ func (s *parser) parseBinaryExpr(oprec0 int) (Expr, error) {
 		if err != nil {
 			return nil, err
 		}
-
 		left = &BinaryExpr{Left: left, Right: right, Op: op, Pos: pos}
 	}
 }
 
-func (s *parser) parseUnaryExpr() (Expr, error) {
-	if isSelector(s.tok) {
-		s.t.Reset()
-		if s.tok == TRACKER {
-			return s.parseTrackerSelectorExpr()
-		} else {
-			return s.parseBaseSelectorExpr()
-		}
-	}
+func (s *parser) parseUnaryExpr() (expr Expr, err error) {
 	switch s.tok {
-	case LPAREN:
-		lpos := s.t.Offset()
-		expr, err := s.parseBinaryExpr(s.tok.Precedence())
-		if err != nil {
-			return nil, err
-		}
-		rpos := s.t.Offset()
-		return &ParenExpr{Expr: expr, LeftPos: lpos, RightPos: rpos}, nil
-	case MUL:
-		return &WildcardLit{Pos: s.t.Offset()}, errSkipExpr
-	case INT:
-		val, err := toIntVal(s.lit)
-		if err != nil {
-			return nil, s.errorFromLit(s.lit)
-		}
-		expr := BasicLit{Pos: s.t.Offset(), Kind: INT, V: val}
-		return &expr, nil
-	case STRING:
-		val, err := toStringVal(s.lit)
-		if err != nil {
-			return nil, s.errorFromLit(s.lit)
-		}
-		expr := BasicLit{Pos: s.t.Offset(), Kind: STRING, V: val}
-		return &expr, nil
-	case FLOAT:
-		val, err := toFloatVal(s.lit)
-		if err != nil {
-			return nil, s.errorFromLit(s.lit)
-		}
-		expr := BasicLit{Pos: s.t.Offset(), Kind: FLOAT, V: val}
-		return &expr, nil
+	case BETWEEN:
+		return s.parseBetweenExpr()
 	}
-	return nil, s.errorFromTok(s.tok)
+
+	s.next()
+
+	if s.except(SUB, ADD) {
+		if s.tok == SUB {
+			s.neg = true
+		}
+		s.next()
+	}
+
+	switch s.tok {
+	case SELECTOR:
+		expr, err = s.parseSelectorExpr()
+	case MUL:
+		expr, err = s.parseWildcardLit()
+	case IDENT:
+		expr, err = s.parseVarExpr()
+	case LBRACK:
+		expr, err = s.parseArrayExpr()
+	case LPAREN:
+		expr, err = s.parseParenExpr()
+	case FLOAT:
+		expr, err = s.parseFloatTypes()
+	case INT:
+		expr, err = s.parseIntTypes()
+	case STRING:
+		expr, err = s.parseStringLit()
+	case GEOMETRY_POINT, GEOMETRY_MULTIPOINT,
+		GEOMETRY_LINE, GEOMETRY_MULTILINE,
+		GEOMETRY_POLYGON, GEOMETRY_CIRCLE, GEOMETRY_MULTIPOLYGON:
+		expr, err = s.parseGeometryExpr()
+	case GEOMETRY_COLLECTION:
+		expr, err = s.parseGeometryCollectionExpr()
+	case BOOLEAN:
+		expr, err = s.parseBooleanLit()
+	}
+	s.neg = false
+	return
 }
 
-func (s *parser) parseTrackerSelectorExpr() (Expr, error) {
+func (s *parser) parseVarExpr() (expr Expr, err error) {
 	s.next()
-	if !isSelector(s.tok) {
-		return nil, s.syntaxError(nil)
+	expr = &VarLit{ID: s.t.TokenText(), Pos: s.t.Offset()}
+	s.next()
+	return
+}
+
+func (s *parser) parseWildcardLit() (expr Expr, err error) {
+	return &WildcardLit{Pos: s.t.Offset()}, nil
+}
+
+func (s *parser) parseBooleanLit() (expr Expr, err error) {
+	switch s.lit {
+	default:
+		return nil, s.error()
+	case "true", "up":
+		expr = &BooleanLit{Val: true, Pos: s.t.Offset()}
+	case "false", "down":
+		expr = &BooleanLit{Val: false, Pos: s.t.Offset()}
 	}
-	expr := &TrackerSelectorExpr{Ident: s.tok, Radius: DefaultRadiusVal}
-	// short form: tracker
-	if !s.t.hasNextToken(LBRACE) && !s.t.hasNextToken(COLON) {
-		expr.Wildcard = true
-		expr.LeftPos = s.t.Offset()
-		return expr, nil
+	s.next()
+	return
+}
+
+func (s *parser) parseArrayExpr() (expr Expr, err error) {
+	if !s.except(LBRACK) {
+		return nil, s.error()
 	}
 
-	parseRadius := func(expr *TrackerSelectorExpr) error {
-		for i := 0; i < 2; i++ {
-			s.next()
-			if i == 0 && s.tok == COLON {
-				continue
-			}
-			if !s.except(UNUSED) {
-				return s.syntaxError(nil)
-			}
-			radius, err := toRadiusVal(s.lit)
-			if err != nil {
-				return err
-			}
-			expr.Radius = radius
+	var arrayExpr *ArrayExpr
+	startPos := s.t.Offset()
+	checkKind := func(k1, k2 Token) error {
+		if k1 != ILLEGAL && k1 != k2 {
+			return s.error()
 		}
 		return nil
 	}
 
-	// short form with radius: tracker:1km
-	if s.t.hasNextToken(COLON) {
-		expr.Wildcard = true
-		// with radius
-		if err := parseRadius(expr); err != nil {
+	for {
+		expr, err = s.parseUnaryExpr()
+		if err != nil {
 			return nil, err
 		}
-		expr.LeftPos = s.t.Offset()
-		return expr, nil
-	}
 
-	if s.t.hasNextToken(LBRACE) {
-		// with args: {@var, *, "uuid"}
-		var li int
-		for {
+		if s.except(COMMA) {
+			s.t.Unwind()
+		}
+
+		if arrayExpr == nil {
+			arrayExpr = &ArrayExpr{StartPos: startPos, List: make([]Expr, 0), Kind: ILLEGAL}
+		}
+
+		switch expr.(type) {
+		default:
+			err = s.error()
+		case *DateTimeLit:
+			err = checkKind(arrayExpr.Kind, DATETIME)
+			arrayExpr.Kind = DATETIME
+		case *TimeLit:
+			err = checkKind(arrayExpr.Kind, TIME)
+			arrayExpr.Kind = TIME
+		case *DateLit:
+			err = checkKind(arrayExpr.Kind, DATE)
+			arrayExpr.Kind = DATE
+		case *DurationLit:
+			err = checkKind(arrayExpr.Kind, DURATION)
+			arrayExpr.Kind = DURATION
+		case *SpeedLit:
+			err = checkKind(arrayExpr.Kind, SPEED)
+			arrayExpr.Kind = SPEED
+		case *PressureLit:
+			err = checkKind(arrayExpr.Kind, PRESSURE)
+			arrayExpr.Kind = PRESSURE
+		case *TemperatureLit:
+			err = checkKind(arrayExpr.Kind, TEMPERATURE)
+			arrayExpr.Kind = TEMPERATURE
+		case *DistanceLit:
+			err = checkKind(arrayExpr.Kind, DISTANCE)
+			arrayExpr.Kind = DISTANCE
+		case *PercentLit:
+			err = checkKind(arrayExpr.Kind, PERCENT)
+			arrayExpr.Kind = PERCENT
+		case *IntLit:
+			err = checkKind(arrayExpr.Kind, INT)
+			arrayExpr.Kind = INT
+		case *FloatLit:
+			err = checkKind(arrayExpr.Kind, FLOAT)
+			arrayExpr.Kind = FLOAT
+		case *StringLit:
+			err = checkKind(arrayExpr.Kind, STRING)
+			arrayExpr.Kind = STRING
+		case *VarLit:
+			err = checkKind(arrayExpr.Kind, IDENT)
+			arrayExpr.Kind = IDENT
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		arrayExpr.List = append(arrayExpr.List, expr)
+
+		if s.except(RBRACK) {
+			break
+		}
+	}
+	arrayExpr.EndPos = s.t.Offset()
+	s.next()
+	return arrayExpr, nil
+}
+
+func (s *parser) parseGeometryCollectionExpr() (expr Expr, err error) {
+	collection := &GeometryCollectionExpr{
+		Objects:  make([]Expr, 0),
+		StartPos: s.t.Offset(),
+	}
+	s.next()
+	if !s.except(LBRACK) {
+		return nil, s.error()
+	}
+	s.next()
+	for {
+		if !isGeometryToken(s.tok) {
+			break
+		}
+		object, oer := s.parseGeometryExpr()
+		if oer != nil {
+			return nil, oer
+		}
+		collection.Objects = append(collection.Objects, object)
+		if s.except(RBRACK) {
 			s.next()
-			if s.except(LBRACE) {
-				if li == 0 {
-					li++
-					continue
-				} else {
-					return nil, s.errorFromLit(s.lit)
+			break
+		}
+		if s.except(COMMA) {
+			s.next()
+		}
+	}
+	collection.EndPos = s.t.Offset()
+	if len(collection.Objects) == 0 {
+		return nil, s.error()
+	}
+	return collection, nil
+}
+
+func (s *parser) parseGeometryExpr() (expr Expr, err error) {
+	geojsontyp := s.tok
+	sp := s.t.Offset()
+	s.next()
+	if !s.except(LBRACK) {
+		return nil, s.error()
+	}
+	var path int
+	var x, y float64
+	var pi uint8
+	var aa [2]float64
+	var bb [][2]float64
+	var cc [][][2]float64
+	open := true
+	q := 1
+	for {
+		s.next()
+		if s.except(EOF) {
+			break
+		}
+		if !s.except(LBRACK, SUB, COMMA, FLOAT, RBRACK) {
+			break
+		}
+		if s.except(LBRACK) {
+			path++
+			q++
+			open = true
+			continue
+		}
+		if s.except(RBRACK) {
+			if open {
+				switch path {
+				case 0:
+					aa = [2]float64{x, y}
+				case 1:
+					if bb == nil {
+						bb = make([][2]float64, 0)
+					}
+					bb = append(bb, [2]float64{x, y})
+				case 2:
+					if cc == nil {
+						cc = make([][][2]float64, 0)
+					}
+					if bb == nil {
+						bb = make([][2]float64, 0)
+					}
+					bb = append(bb, [2]float64{x, y})
 				}
 			}
-			if s.except(RBRACE, EOF) {
+			if path > 0 {
+				path--
+			}
+			if path == 0 && bb != nil && cc != nil {
+				if len(bb) > 0 {
+					cc = append(cc, bb)
+				}
+				bb = make([][2]float64, 0)
+			}
+			open = false
+			pi = 0
+			x = 0
+			y = 0
+			q--
+			if q <= 0 {
+				s.next()
+				break
+			}
+			continue
+		}
+		if s.except(COMMA) {
+			if open {
+				pi = 1
+			}
+			continue
+		}
+		if s.except(SUB) {
+			s.neg = true
+			s.next()
+		}
+		val, err := strconv.ParseFloat(s.lit, 64)
+		if err != nil {
+			s.err = err
+			return nil, s.error()
+		}
+		if s.neg {
+			val = -val
+		}
+		switch pi {
+		case 0:
+			x = val
+		case 1:
+			y = val
+		default:
+			return nil, s.error()
+		}
+		s.neg = false
+	}
+	switch geojsontyp {
+	case GEOMETRY_POINT:
+		return &GeometryPointExpr{Val: aa, StartPos: sp, EndPos: s.t.Offset()}, nil
+	case GEOMETRY_MULTIPOINT:
+		return &GeometryMultiPointExpr{Val: bb, StartPos: sp, EndPos: s.t.Offset()}, nil
+	case GEOMETRY_LINE:
+		return &GeometryLineExpr{Val: bb, StartPos: sp, EndPos: s.t.Offset()}, nil
+	case GEOMETRY_MULTILINE:
+		return &GeometryMultiLineExpr{Val: cc, StartPos: sp, EndPos: s.t.Offset()}, nil
+	case GEOMETRY_POLYGON:
+		return &GeometryPolygonExpr{Val: bb, StartPos: sp, EndPos: s.t.Offset()}, nil
+	case GEOMETRY_MULTIPOLYGON:
+		return &GeometryMultiPolygonExpr{Val: cc, StartPos: sp, EndPos: s.t.Offset()}, nil
+	case GEOMETRY_CIRCLE:
+		if !s.except(COLON) {
+			return nil, s.error()
+		}
+		s.next()
+		switch s.tok {
+		case INT:
+			re, err := s.parseIntTypes()
+			if err != nil {
+				return nil, err
+			}
+			distLit, ok := re.(*DistanceLit)
+			if !ok {
+				return nil, s.error()
+			}
+			return &GeometryCircleExpr{Val: aa, Radius: distLit, StartPos: sp, EndPos: s.t.Offset()}, nil
+		case FLOAT:
+			re, err := s.parseFloatTypes()
+			if err != nil {
+				return nil, err
+			}
+			distLit, ok := re.(*DistanceLit)
+			if !ok {
+				return nil, s.error()
+			}
+			return &GeometryCircleExpr{Val: aa, Radius: distLit, StartPos: sp, EndPos: s.t.Offset()}, nil
+		}
+	}
+	err = s.error()
+	return
+}
+
+func (s *parser) parseParenExpr() (expr Expr, err error) {
+	lp := s.t.Offset()
+	expr, err = s.parseBinaryExpr(s.tok.Precedence())
+	if err != nil {
+		return nil, err
+	}
+	rp := s.t.Offset()
+	s.next()
+	return &ParenExpr{Expr: expr, StartPos: lp, EndPos: rp}, nil
+}
+
+func (s *parser) parseStringLit() (expr Expr, err error) {
+	expr = &StringLit{Val: trim(s.t.TokenText()), Pos: s.t.Offset()}
+	s.next()
+	return
+}
+
+func (s *parser) parseFloatTypes() (expr Expr, err error) {
+	llen := len(s.lit) - 1
+	if s.lit[llen] == 'p' {
+		s.lit = s.lit[:llen]
+	}
+	val, err := strconv.ParseFloat(s.lit, 64)
+	if err != nil {
+		return nil, s.error()
+	}
+	expr, err = s.parseAllTypes(val)
+	if err != nil {
+		return nil, err
+	}
+	if expr == nil {
+		if s.neg {
+			val = -val
+		}
+		expr = &FloatLit{Val: val, Pos: s.t.Offset()}
+	}
+	return
+}
+
+func (s *parser) parseIntTypes() (expr Expr, err error) {
+	intval, err := strconv.Atoi(s.lit)
+	if err != nil {
+		return nil, s.error()
+	}
+	expr, err = s.parseAllTypes(float64(intval))
+	if err != nil {
+		return nil, err
+	}
+	if expr == nil {
+		if s.neg {
+			intval = -intval
+		}
+		expr = &IntLit{Val: intval, Pos: s.t.Offset()}
+	}
+	return
+}
+
+func (s *parser) parseDateTime(prefix string) (expr Expr, err error) {
+	in, err := strconv.Atoi(prefix)
+	if err != nil {
+		s.err = err
+		return nil, s.error()
+	}
+	var (
+		val   int
+		year  int
+		month time.Month
+		day   int
+		hour  int
+		min   int
+		sec   int
+	)
+	var isOnlyTime bool
+	index := 1
+	step := 8
+	if s.lit == ":" {
+		step = 3
+		hour = in
+		isOnlyTime = true
+	} else {
+		year = in
+	}
+	for i := 0; i < step; i++ {
+		s.next()
+		if s.except(EOF) {
+			break
+		}
+		if len(s.lit) > 0 && s.lit[0] == 't' {
+			s.lit = s.lit[1:]
+			s.tok = INT
+		}
+		if !s.except(INT, COLON, SUB) {
+			s.t.Reset()
+			break
+		}
+		if s.except(SUB, COLON) {
+			continue
+		}
+		val, err = strconv.Atoi(s.lit)
+		if err != nil {
+			s.err = err
+			return nil, s.error()
+		}
+		if isOnlyTime {
+			switch index {
+			case 1:
+				min = val
+			case 2:
+				sec = val
+			}
+		} else {
+			switch index {
+			case 1:
+				month = time.Month(val)
+			case 2:
+				day = val
+			case 3:
+				hour = val
+			case 4:
+				min = val
+			case 5:
+				sec = val
+			}
+		}
+		index++
+	}
+
+	switch isOnlyTime {
+	case true:
+		switch index {
+		default:
+			err = s.error()
+		case 3, 2:
+			expr = &TimeLit{
+				Hour:    hour,
+				Minute:  min,
+				Seconds: sec,
+				Pos:     s.t.Offset(),
+			}
+		}
+	case false:
+		switch index {
+		default:
+			err = s.error()
+		case 3:
+			expr = &DateLit{
+				Year:  year,
+				Month: month,
+				Day:   day,
+				Pos:   s.t.Offset(),
+			}
+		case 6:
+			expr = &DateTimeLit{
+				Year:    year,
+				Month:   month,
+				Day:     day,
+				Hours:   hour,
+				Minutes: min,
+				Seconds: sec,
+				Pos:     s.t.Offset(),
+			}
+		}
+	}
+	s.next()
+	return
+}
+
+func (s *parser) parseAllTypes(v float64) (expr Expr, err error) {
+	plit := s.lit
+	s.next()
+	unit := s.t.TokenText()
+	switch {
+	case isPercentUnit(unit):
+		expr = &PercentLit{Val: v, Pos: s.t.Offset()}
+		s.next()
+	case isDateTimePrefix(unit):
+		return s.parseDateTime(plit)
+	case isPressureUnit(unit):
+		u := unitFromString(s.lit)
+		expr = &PressureLit{Val: v, U: u, Pos: s.t.Offset()}
+		s.next()
+	case isDistanceUnit(unit):
+		u := unitFromString(s.lit)
+		expr = &DistanceLit{Val: v, U: u, Pos: s.t.Offset()}
+		s.next()
+	case isSpeedUnit(unit):
+		u := unitFromString(s.lit)
+		expr = &SpeedLit{Val: v, U: u, Pos: s.t.Offset()}
+		s.next()
+	case isTemperatureUnit(unit):
+		ts := Positive
+		if s.neg {
+			ts = Negative
+		}
+		u := unitFromString(s.lit)
+		expr = &TemperatureLit{Val: v, U: u, Vec: ts, Pos: s.t.Offset()}
+		s.next()
+	default:
+		var fr rune
+		if len(s.lit) > 0 {
+			fr = rune(s.lit[0])
+		}
+		switch fr {
+		case 'h', 'm', 's':
+			dur, er := time.ParseDuration(plit + s.lit)
+			if er != nil {
+				return nil, s.error()
+			}
+			expr = &DurationLit{Val: dur, Pos: s.t.Offset()}
+			s.next()
+		}
+	}
+	return
+}
+
+func (s *parser) parseBetweenExpr() (expr Expr, err error) {
+	s.next()
+	startPos := s.t.Offset()
+	var low, high Expr
+	switch s.tok {
+	case INT:
+		low, err = s.parseIntTypes()
+	case FLOAT:
+		low, err = s.parseIntTypes()
+	default:
+		err = s.error()
+	}
+	if err != nil {
+		return nil, err
+	}
+	s.next()
+	s.next()
+	switch s.tok {
+	case INT:
+		high, err = s.parseIntTypes()
+	case FLOAT:
+		high, err = s.parseIntTypes()
+	default:
+		err = s.error()
+	}
+	if err != nil {
+		return nil, err
+	}
+	expr = &RangeExpr{
+		Low:      low,
+		High:     high,
+		StartPos: startPos,
+		EndPos:   s.t.Offset(),
+	}
+	return
+}
+
+func (s *parser) parseSelectorProps(selector *SelectorExpr) error {
+	for {
+		prop, err := s.parseUnaryExpr()
+		if err != nil {
+			return err
+		}
+		if s.except(EOF) {
+			break
+		}
+		if selector.Props == nil {
+			selector.Props = make([]Expr, 0)
+		}
+		selector.Props = append(selector.Props, prop)
+		if !s.except(COMMA) {
+			break
+		}
+	}
+	return nil
+}
+
+func (s *parser) parseSelectorExpr() (expr Expr, err error) {
+	selExpr := &SelectorExpr{
+		Ident:    s.lit,
+		StartPos: s.t.Offset(),
+	}
+	s.next()
+	if !s.except(LBRACE, COLON) {
+		selExpr.Wildcard = true
+		selExpr.EndPos = s.t.Offset()
+		return selExpr, nil
+	}
+
+	if s.except(COLON) {
+		err = s.parseSelectorProps(selExpr)
+		if err != nil {
+			return nil, err
+		}
+		selExpr.EndPos = s.t.Offset()
+		return selExpr, nil
+	}
+
+	if s.except(LBRACE) {
+		var i int
+		for {
+			s.next()
+			if s.except(EOF, RBRACE) {
 				break
 			}
 			if s.except(COMMA) {
 				continue
 			}
-			// - with vars
-			if s.tok == ILLEGAL && s.lit == "@" {
-				if expr.Vars == nil {
-					expr.Vars = make(map[string]struct{})
-				}
-				s.next()
-				if !s.except(UNUSED) {
-					return nil, s.errorFromLit(s.lit)
-				}
-				expr.Vars[s.lit] = struct{}{}
-			}
-			// - with identifier
-			if s.except(STRING) {
-				if expr.Args == nil {
-					expr.Args = make(map[string]struct{})
-				}
-				expr.Args[trim(s.lit)] = struct{}{}
-			}
-			// - with wildcard
 			if s.except(MUL) {
-				expr.Wildcard = true
+				selExpr.Wildcard = true
+				continue
 			}
+			i++
+			if !s.except(STRING) {
+				return nil, s.error()
+			}
+			if selExpr.Args == nil {
+				selExpr.Args = make(map[string]struct{})
+			}
+			selExpr.Args[trim(s.t.TokenText())] = struct{}{}
+		}
+		if i == 0 {
+			selExpr.Wildcard = true
 		}
 	}
 
-	// with radius
-	if s.t.hasNextToken(COLON) {
-		expr.Wildcard = true
-		// with radius
-		if err := parseRadius(expr); err != nil {
+	s.next()
+
+	if s.except(COLON) {
+		err = s.parseSelectorProps(selExpr)
+		if err != nil {
 			return nil, err
 		}
-		return expr, nil
+		selExpr.EndPos = s.t.Offset()
+		return selExpr, nil
 	}
-	expr.LeftPos = s.t.Offset()
-	return expr, nil
+
+	selExpr.EndPos = s.t.Offset()
+	return selExpr, nil
 }
 
-func (s *parser) parseBaseSelectorExpr() (Expr, error) {
-	tok, _ := s.t.Scan()
-	if !isSelector(tok) {
-		return nil, s.errorFromTok(tok)
+func (s *parser) error() error {
+	err := Error{
+		Offset: s.t.s.Offset,
+		Err:    s.err,
+		Lit:    s.t.lit,
 	}
-	expr := BaseSelectorExpr{Ident: tok, Qualifier: Any}
-	tok, _ = s.t.Scan()
-	// short form: speed,object,etc...
-	if tok != LBRACE {
-		s.t.Reset()
-		expr.Wildcard = true
-		return &expr, nil
+	_, er := s.r.Seek(0, io.SeekStart)
+	if er == nil {
+		buf := make([]byte, s.t.s.Offset)
+		_, _ = s.r.Read(buf)
+		err.Msg = string(buf)
 	}
-	// with args: {@var, *, "uuid"}
-	for {
-		tok, lit := s.t.Scan()
-		if tok == RBRACE || tok == EOF {
-			break
-		}
-		if tok == COMMA {
-			continue
-		}
-		// - with vars
-		if tok == ILLEGAL && lit == "@" {
-			if expr.Vars == nil {
-				expr.Vars = make(map[string]struct{})
-			}
-			tok, lit = s.t.Scan()
-			if tok != UNUSED {
-				return nil, s.errorFromLit(lit)
-			}
-			expr.Vars[lit] = struct{}{}
-		}
-		// - with identifier
-		if tok == STRING {
-			if expr.Args == nil {
-				expr.Args = make(map[string]struct{})
-			}
-			expr.Args[trim(lit)] = struct{}{}
-		}
-		// - with wildcard
-		if tok == MUL {
-			expr.Wildcard = true
-		}
-	}
-	// qualifier
-	tok, _ = s.t.Scan()
-	if tok != COLON {
-		s.t.Reset()
-	} else {
-		_, lit := s.t.Scan()
-		switch strings.ToLower(lit) {
-		default:
-			return nil, s.errorFromTok(tok)
-		case "any":
-			expr.Qualifier = Any
-		case "all":
-			expr.Qualifier = All
-		}
-	}
-	return &expr, nil
+	return &err
 }
 
-func (s *parser) errorFromLit(lit string) error {
-	return newError(s.t, "near"+" '"+lit+"'")
+func newParser(t *Tokenizer, r *strings.Reader) *parser {
+	return &parser{t: t, r: r}
 }
 
-func (s *parser) syntaxError(withCtx error) error {
-	s.err = withCtx
-	return s.errorFromTok(s.tok)
-}
-
-func (s *parser) errorFromTok(tok Token) error {
-	var lit string
-	if tok == UNUSED {
-		lit = s.t.lit
-	} else {
-		lit = KeywordString(tok)
+func Format(stmt Statement, b *bytes.Buffer) {
+	switch typ := stmt.(type) {
+	case *TriggerStmt:
+		formatTriggerStmt(typ, b)
 	}
-	msg := "near" + " '" + lit + "'"
-	if s.err != nil {
-		msg += " with error:" + s.err.Error()
-	}
-	return newError(s.t, msg)
 }
 
-func newParser(t *Tokenizer) *parser {
-	return &parser{t: t}
+type Error struct {
+	Offset int
+	Err    error
+	Msg    string
+	Lit    string
+}
+
+func (e *Error) Error() string {
+	var ctx string
+	if e.Err != nil {
+		ctx = "error: " + e.Err.Error()
+	}
+	return fmt.Sprintf("syntax error at position offset=%d, near=%s\n```\n%s ...^\n```\n%s",
+		e.Offset, e.Lit, strings.TrimSpace(e.Msg), ctx)
+}
+
+func isDateTimePrefix(s string) (ok bool) {
+	switch s {
+	case "-", ":":
+		ok = true
+	}
+	return
+}
+
+func isGeometryToken(tok Token) (ok bool) {
+	switch tok {
+	case GEOMETRY_POINT, GEOMETRY_MULTIPOINT,
+		GEOMETRY_LINE, GEOMETRY_MULTILINE,
+		GEOMETRY_POLYGON, GEOMETRY_MULTIPOLYGON,
+		GEOMETRY_CIRCLE:
+		ok = true
+	}
+	return
+}
+
+func trim(lit string) string {
+	lit = strings.TrimLeft(lit, `"`)
+	lit = strings.TrimRight(lit, `"`)
+	return lit
 }

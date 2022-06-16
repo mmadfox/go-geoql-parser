@@ -1,7 +1,6 @@
 package geoqlparser
 
 import (
-	"fmt"
 	"io"
 	"strings"
 	"text/scanner"
@@ -13,30 +12,24 @@ type (
 )
 
 type Tokenizer struct {
-	scanner scanner.Scanner
-	hop     int
-	tok     rune
-	lit     string
+	s   scanner.Scanner
+	hop int
+	tok rune
+	lit string
 }
 
 func NewTokenizer(r io.Reader) *Tokenizer {
-	s := &Tokenizer{scanner: scanner.Scanner{}}
-	s.scanner.Mode = scanner.ScanIdents | scanner.ScanFloats | scanner.ScanStrings
-	s.scanner.Init(r)
+	s := &Tokenizer{s: scanner.Scanner{}}
+	s.s.Mode = scanner.ScanIdents | scanner.ScanFloats | scanner.ScanStrings
+	s.s.Init(r)
 	return s
-}
-
-func (t *Tokenizer) errorPos() string {
-	pos := t.scanner.Pos()
-	return fmt.Sprintf("line=%d,column=%d,offset=%d",
-		pos.Line, pos.Column, pos.Offset)
 }
 
 func (t *Tokenizer) next() (rune, string) {
 	if t.hop != 0 {
 		t.hop = 0
 	} else {
-		t.tok, t.lit = t.scanner.Scan(), t.scanner.TokenText()
+		t.tok, t.lit = t.s.Scan(), t.s.TokenText()
 	}
 	return t.tok, t.lit
 }
@@ -45,54 +38,20 @@ func (t *Tokenizer) Reset() {
 	t.hop = 1
 }
 
+func (t *Tokenizer) Unwind() {
+	t.hop = 0
+}
+
 func (t *Tokenizer) ErrorCount() int {
-	return t.scanner.ErrorCount
+	return t.s.ErrorCount
 }
 
 func (t *Tokenizer) Offset() Pos {
-	return Pos(t.scanner.Offset)
+	return Pos(t.s.Offset)
 }
 
-func (t *Tokenizer) hasNextToken(tok Token) (ok bool) {
-	r := t.scanner.Peek()
-	switch r {
-	case '{':
-		ok = KeywordString(tok) == "{"
-	case '}':
-		ok = KeywordString(tok) == "}"
-	case ':':
-		ok = KeywordString(tok) == ":"
-	}
-	return
-}
-
-func (t *Tokenizer) scanNMEA() (tok Token, lit string, found bool) {
-	scanSemi := func() bool {
-		r, _ := t.next()
-		return r == ':'
-	}
-	if !scanSemi() {
-		return
-	}
-	ptyp, prefix := t.next()
-	if ptyp != scanner.Ident {
-		return
-	}
-	if !scanSemi() {
-		return
-	}
-	styp, ident := t.next()
-	if styp != scanner.Ident {
-		return
-	}
-	k := "nmea:" + prefix + ":" + ident
-	tt, ok := keywords[k]
-	if ok {
-		tok = tt
-		lit = k
-		found = true
-	}
-	return
+func (t *Tokenizer) TokenText() string {
+	return t.s.TokenText()
 }
 
 func (t *Tokenizer) Scan() (tok Token, lit string) {
@@ -117,6 +76,8 @@ func (t *Tokenizer) Scan() (tok Token, lit string) {
 			tok = ASSIGN
 			t.Reset()
 		}
+	case '@':
+		tok = IDENT
 	case ';':
 		tok = SEMICOLON
 	case ',':
@@ -135,6 +96,10 @@ func (t *Tokenizer) Scan() (tok Token, lit string) {
 		tok = RBRACE
 	case '/':
 		tok = QUO
+	case '+':
+		tok = ADD
+	case '-':
+		tok = SUB
 	case '*':
 		tok = MUL
 	case '&':
@@ -195,40 +160,49 @@ func (t *Tokenizer) Scan() (tok Token, lit string) {
 			found bool
 		)
 		switch lit {
-		case "is":
-			_, l := t.next()
-			switch strings.ToLower(l) {
-			case "ok", "true", "up":
-				kwd = ISTRUE
-				found = true
-			case "false", "down":
-				kwd = ISFALSE
-				found = true
-			}
-		case "nmea":
-			kwd, lit, found = t.scanNMEA()
+		case "point":
+			found = true
+			kwd = GEOMETRY_POINT
+		case "multipoint":
+			found = true
+			kwd = GEOMETRY_MULTIPOINT
+		case "line":
+			found = true
+			kwd = GEOMETRY_LINE
+		case "multiline":
+			found = true
+			kwd = GEOMETRY_MULTILINE
+		case "polygon":
+			found = true
+			kwd = GEOMETRY_POLYGON
+		case "multipolygon":
+			found = true
+			kwd = GEOMETRY_MULTIPOLYGON
+		case "circle":
+			found = true
+			kwd = GEOMETRY_CIRCLE
+		case "collection":
+			found = true
+			kwd = GEOMETRY_COLLECTION
+		case "true", "up", "down", "false":
+			found = true
+			kwd = BOOLEAN
 		case "not":
 			found = true
 			r, s = t.next()
 			lit = strings.ToLower(s)
-			switch lit {
-			default:
-				found = false
-			case "in":
-				kwd = NIN
-			case "eq":
-				kwd = NEQ
-			case "between":
-				kwd = NOTBETWEEN
-			}
-			if found {
-				lit = KeywordString(kwd)
+			notlit := "not " + lit
+			notkwd, exists := keywords[notlit]
+			if exists {
+				found = true
+				kwd = notkwd
+				lit = notlit
 			}
 		default:
 			kwd, found = keywords[lit]
 		}
 		if !found {
-			tok = UNUSED
+			tok = SELECTOR
 			return
 		}
 		tok = kwd
@@ -242,8 +216,13 @@ func (op Token) Precedence() (n int) {
 		n = 1
 	case LAND, AND:
 		n = 2
-	case NEQ, LSS, LEQ, GTR, GEQ:
+	case NEQ, LSS, LEQ, GTR, GEQ, BETWEEN, EQL, LEQL, INTERSECTS,
+		IN, NOT_IN:
 		n = 3
+	case ADD, SUB:
+		n = 4
+	case MUL, QUO:
+		n = 5
 	}
 	return
 }
