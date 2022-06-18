@@ -226,9 +226,9 @@ func (s *parser) parseBinaryExpr(oprec0 int) (Expr, error) {
 }
 
 func (s *parser) parseUnaryExpr() (expr Expr, err error) {
-	switch s.tok {
-	case BETWEEN:
-		return s.parseBetweenExpr()
+	if s.t.Err() != nil {
+		s.err = s.t.Err()
+		return nil, s.error()
 	}
 
 	s.next()
@@ -266,6 +266,12 @@ func (s *parser) parseUnaryExpr() (expr Expr, err error) {
 	case BOOLEAN:
 		expr, err = s.parseBooleanLit()
 	}
+
+	switch s.tok {
+	case RANGE:
+		expr, err = s.parseRangeExpr(expr)
+	}
+
 	s.neg = false
 	return
 }
@@ -275,6 +281,24 @@ func (s *parser) parseVarExpr() (expr Expr, err error) {
 	expr = &VarLit{ID: s.t.TokenText(), Pos: s.t.Offset()}
 	s.next()
 	return
+}
+
+func (s *parser) parseRangeExpr(low Expr) (expr Expr, err error) {
+	_, isRangeExpr := low.(*RangeExpr)
+	if isRangeExpr {
+		return nil, s.error()
+	}
+	startPos := s.t.Offset()
+	high, err := s.parseUnaryExpr()
+	if err != nil {
+		return
+	}
+	return &RangeExpr{
+		Low:      low,
+		High:     high,
+		StartPos: startPos,
+		EndPos:   s.t.Offset(),
+	}, nil
 }
 
 func (s *parser) parseWildcardLit() (expr Expr, err error) {
@@ -364,6 +388,9 @@ func (s *parser) parseArrayExpr() (expr Expr, err error) {
 		case *VarLit:
 			err = checkKind(arrayExpr.Kind, IDENT)
 			arrayExpr.Kind = IDENT
+		case *RangeExpr:
+			err = checkKind(arrayExpr.Kind, RANGE)
+			arrayExpr.Kind = RANGE
 		}
 		if err != nil {
 			return nil, err
@@ -434,7 +461,7 @@ func (s *parser) parseGeometryExpr() (expr Expr, err error) {
 		if s.except(EOF) {
 			break
 		}
-		if !s.except(LBRACK, SUB, COMMA, FLOAT, RBRACK) {
+		if !s.except(LBRACK, SUB, COMMA, FLOAT, INT, RBRACK) {
 			break
 		}
 		if s.except(LBRACK) {
@@ -493,11 +520,26 @@ func (s *parser) parseGeometryExpr() (expr Expr, err error) {
 			s.neg = true
 			s.next()
 		}
-		val, err := strconv.ParseFloat(s.lit, 64)
-		if err != nil {
-			s.err = err
+
+		var val float64
+		switch s.tok {
+		case FLOAT:
+			val, err = strconv.ParseFloat(s.lit, 64)
+			if err != nil {
+				s.err = err
+				return nil, s.error()
+			}
+		case INT:
+			ival, err := strconv.Atoi(s.lit)
+			if err != nil {
+				s.err = err
+				return nil, s.error()
+			}
+			val = float64(ival)
+		default:
 			return nil, s.error()
 		}
+
 		if s.neg {
 			val = -val
 		}
@@ -608,8 +650,9 @@ func (s *parser) parseIntTypes() (expr Expr, err error) {
 		if s.neg {
 			intval = -intval
 		}
-		expr = &IntLit{Val: intval, Pos: s.t.Offset()}
+		expr = &IntLit{Val: int(intval), Pos: s.t.Offset()}
 	}
+
 	return
 }
 
@@ -767,43 +810,6 @@ func (s *parser) parseAllTypes(v float64) (expr Expr, err error) {
 			expr = &DurationLit{Val: dur, Pos: s.t.Offset()}
 			s.next()
 		}
-	}
-	return
-}
-
-func (s *parser) parseBetweenExpr() (expr Expr, err error) {
-	s.next()
-	startPos := s.t.Offset()
-	var low, high Expr
-	switch s.tok {
-	case INT:
-		low, err = s.parseIntTypes()
-	case FLOAT:
-		low, err = s.parseIntTypes()
-	default:
-		err = s.error()
-	}
-	if err != nil {
-		return nil, err
-	}
-	s.next()
-	s.next()
-	switch s.tok {
-	case INT:
-		high, err = s.parseIntTypes()
-	case FLOAT:
-		high, err = s.parseIntTypes()
-	default:
-		err = s.error()
-	}
-	if err != nil {
-		return nil, err
-	}
-	expr = &RangeExpr{
-		Low:      low,
-		High:     high,
-		StartPos: startPos,
-		EndPos:   s.t.Offset(),
 	}
 	return
 }

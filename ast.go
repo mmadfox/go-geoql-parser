@@ -94,6 +94,10 @@ func formatTriggerStmt(t *TriggerStmt, b *bytes.Buffer) {
 	}
 }
 
+func formatFloat(b *bytes.Buffer, v float64) {
+	b.WriteString(strconv.FormatFloat(v, 'f', -1, 64))
+}
+
 func (t *TriggerStmt) initVars() {
 	if t.Set != nil {
 		return
@@ -199,10 +203,10 @@ type GeometryPointExpr struct {
 func (e *GeometryPointExpr) format(b *bytes.Buffer, _ string, _ bool) {
 	b.WriteString("point")
 	b.WriteRune('[')
-	b.WriteString(fmt.Sprintf("%f", e.Val[0]))
+	formatFloat(b, e.Val[0])
 	b.WriteRune(',')
 	b.WriteRune(' ')
-	b.WriteString(fmt.Sprintf("%f", e.Val[1]))
+	formatFloat(b, e.Val[1])
 	b.WriteRune(']')
 }
 
@@ -223,10 +227,10 @@ func (e *GeometryMultiPointExpr) format(b *bytes.Buffer, padding string, inline 
 			b.WriteString(pad2)
 		}
 		b.WriteRune('[')
-		b.WriteString(fmt.Sprintf("%f", e.Val[i][0]))
+		formatFloat(b, e.Val[i][0])
 		b.WriteRune(',')
 		b.WriteRune(' ')
-		b.WriteString(fmt.Sprintf("%f", e.Val[i][1]))
+		formatFloat(b, e.Val[i][1])
 		b.WriteRune(']')
 		if i+1 < len(e.Val) {
 			b.WriteRune(',')
@@ -259,10 +263,10 @@ func (e *GeometryLineExpr) format(b *bytes.Buffer, padding string, inline bool) 
 			b.WriteString(pad2)
 		}
 		b.WriteRune('[')
-		b.WriteString(fmt.Sprintf("%f", e.Val[i][0]))
+		formatFloat(b, e.Val[i][0])
 		b.WriteRune(',')
 		b.WriteRune(' ')
-		b.WriteString(fmt.Sprintf("%f", e.Val[i][1]))
+		formatFloat(b, e.Val[i][1])
 		b.WriteRune(']')
 		if i+1 < len(e.Val) {
 			b.WriteRune(',')
@@ -300,10 +304,10 @@ func (e *GeometryMultiLineExpr) format(b *bytes.Buffer, padding string, inline b
 				b.WriteString(pad3)
 			}
 			b.WriteRune('[')
-			b.WriteString(fmt.Sprintf("%f", e.Val[i][j][0]))
+			formatFloat(b, e.Val[i][j][0])
 			b.WriteRune(',')
 			b.WriteRune(' ')
-			b.WriteString(fmt.Sprintf("%f", e.Val[i][j][1]))
+			formatFloat(b, e.Val[i][j][1])
 			b.WriteRune(']')
 			if j+1 < len(e.Val[i]) {
 				b.WriteRune(',')
@@ -346,10 +350,10 @@ func (e *GeometryPolygonExpr) format(b *bytes.Buffer, padding string, inline boo
 			b.WriteString(pad2)
 		}
 		b.WriteRune('[')
-		b.WriteString(fmt.Sprintf("%f", e.Val[i][0]))
+		formatFloat(b, e.Val[i][0])
 		b.WriteRune(',')
 		b.WriteRune(' ')
-		b.WriteString(fmt.Sprintf("%f", e.Val[i][1]))
+		formatFloat(b, e.Val[i][1])
 		b.WriteRune(']')
 		if i+1 < len(e.Val) {
 			b.WriteRune(',')
@@ -373,10 +377,10 @@ type GeometryCircleExpr struct {
 func (e *GeometryCircleExpr) format(b *bytes.Buffer, padding string, inline bool) {
 	b.WriteString("circle")
 	b.WriteRune('[')
-	b.WriteString(fmt.Sprintf("%f", e.Val[0]))
+	formatFloat(b, e.Val[0])
 	b.WriteRune(',')
 	b.WriteRune(' ')
-	b.WriteString(fmt.Sprintf("%f", e.Val[1]))
+	formatFloat(b, e.Val[1])
 	b.WriteRune(']')
 	b.WriteRune(':')
 	e.Radius.format(b, padding, inline)
@@ -406,10 +410,10 @@ func (e *GeometryMultiPolygonExpr) format(b *bytes.Buffer, padding string, inlin
 				b.WriteString(pad3)
 			}
 			b.WriteRune('[')
-			b.WriteString(fmt.Sprintf("%f", e.Val[i][j][0]))
+			formatFloat(b, e.Val[i][j][0])
 			b.WriteRune(',')
 			b.WriteRune(' ')
-			b.WriteString(fmt.Sprintf("%f", e.Val[i][j][1]))
+			formatFloat(b, e.Val[i][j][1])
 			b.WriteRune(']')
 			if j+1 < len(e.Val[i]) {
 				b.WriteRune(',')
@@ -470,7 +474,7 @@ type IntLit struct {
 	Pos Pos
 }
 
-func (e *IntLit) format(b *bytes.Buffer, padding string, inline bool) {
+func (e *IntLit) format(b *bytes.Buffer, _ string, _ bool) {
 	b.WriteString(strconv.Itoa(e.Val))
 }
 
@@ -516,8 +520,8 @@ type FloatLit struct {
 	Pos Pos
 }
 
-func (e *FloatLit) format(b *bytes.Buffer, padding string, inline bool) {
-	b.WriteString(fmt.Sprintf("%f", e.Val))
+func (e *FloatLit) format(b *bytes.Buffer, _ string, _ bool) {
+	formatFloat(b, e.Val)
 }
 
 type DurationLit struct {
@@ -540,7 +544,7 @@ func (e *TemperatureLit) format(b *bytes.Buffer, _ string, _ bool) {
 	if e.Val != 0 {
 		b.WriteString(e.Vec.String())
 	}
-	b.WriteString(fmt.Sprintf("%.2f", e.Val))
+	formatFloat(b, e.Val)
 	b.WriteString(e.U.String())
 }
 
@@ -551,7 +555,7 @@ type PressureLit struct {
 }
 
 func (e *PressureLit) format(b *bytes.Buffer, _ string, _ bool) {
-	b.WriteString(fmt.Sprintf("%.2f", e.Val))
+	formatFloat(b, e.Val)
 	b.WriteString(e.U.String())
 }
 
@@ -562,7 +566,7 @@ type DistanceLit struct {
 }
 
 func (e *DistanceLit) format(b *bytes.Buffer, _ string, _ bool) {
-	b.WriteString(fmt.Sprintf("%.1f", e.Val))
+	formatFloat(b, e.Val)
 	b.WriteString(e.U.String())
 }
 
@@ -573,7 +577,7 @@ type SpeedLit struct {
 }
 
 func (e *SpeedLit) format(b *bytes.Buffer, _ string, _ bool) {
-	b.WriteString(fmt.Sprintf("%.2f", e.Val))
+	formatFloat(b, e.Val)
 	b.WriteString(e.U.String())
 }
 
@@ -655,12 +659,12 @@ type SelectorExpr struct {
 	EndPos   Pos
 }
 
-func (e *SelectorExpr) argsNeedExpand() (ok bool) {
+func (e *SelectorExpr) needExpand() (ok bool) {
 	var n int
 	var i int
 	for k := range e.Args {
 		n += len(k)
-		if n > 48 {
+		if n > 64 {
 			ok = true
 			break
 		}
@@ -680,7 +684,7 @@ func (e *SelectorExpr) format(b *bytes.Buffer, padding string, inline bool) {
 		var expand bool
 		var pad2 string
 		if !inline {
-			expand = e.argsNeedExpand()
+			expand = e.needExpand()
 			if expand {
 				pad2 = padding + "\t"
 			}

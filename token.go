@@ -1,9 +1,11 @@
 package geoqlparser
 
 import (
+	"errors"
 	"io"
 	"strings"
-	"text/scanner"
+
+	"github.com/mmadfox/go-geoql-parser/scanner"
 )
 
 type (
@@ -16,12 +18,16 @@ type Tokenizer struct {
 	hop int
 	tok rune
 	lit string
+	err error
 }
 
 func NewTokenizer(r io.Reader) *Tokenizer {
 	s := &Tokenizer{s: scanner.Scanner{}}
 	s.s.Mode = scanner.ScanIdents | scanner.ScanFloats | scanner.ScanStrings
 	s.s.Init(r)
+	s.s.Error = func(_ *scanner.Scanner, msg string) {
+		s.err = errors.New(msg)
+	}
 	return s
 }
 
@@ -46,6 +52,10 @@ func (t *Tokenizer) ErrorCount() int {
 	return t.s.ErrorCount
 }
 
+func (t *Tokenizer) Err() error {
+	return t.err
+}
+
 func (t *Tokenizer) Offset() Pos {
 	return Pos(t.s.Offset)
 }
@@ -66,6 +76,16 @@ func (t *Tokenizer) Scan() (tok Token, lit string) {
 		tok = FLOAT
 	case scanner.String:
 		tok = STRING
+	case '.':
+		nr, _ := t.next()
+		switch nr {
+		case '.':
+			tok = RANGE
+			lit = KeywordString(tok)
+		default:
+			tok = PERIOD
+			t.Reset()
+		}
 	case '=':
 		nr, _ := t.next()
 		switch nr {
@@ -102,26 +122,6 @@ func (t *Tokenizer) Scan() (tok Token, lit string) {
 		tok = SUB
 	case '*':
 		tok = MUL
-	case '&':
-		nr, _ := t.next()
-		switch nr {
-		case '&':
-			tok = LAND
-			lit = KeywordString(tok)
-		default:
-			tok = ILLEGAL
-			t.Reset()
-		}
-	case '|':
-		nr, _ := t.next()
-		switch nr {
-		case '|':
-			tok = LOR
-			lit = KeywordString(tok)
-		default:
-			tok = ILLEGAL
-			t.Reset()
-		}
 	case '!':
 		nr, _ := t.next()
 		switch nr {
@@ -212,12 +212,12 @@ func (t *Tokenizer) Scan() (tok Token, lit string) {
 
 func (op Token) Precedence() (n int) {
 	switch op {
-	case LOR, OR:
+	case OR:
 		n = 1
-	case LAND, AND:
+	case AND:
 		n = 2
-	case NEQ, LSS, LEQ, GTR, GEQ, BETWEEN, EQL, LEQL, INTERSECTS,
-		IN, NOT_IN:
+	case LSS, LEQ, GTR, GEQ, EQL, LEQL, INTERSECTS, NOT_INTERSECTS,
+		IN, NOT_IN, NEARBY, NOT_NEARBY, NOT_EQ:
 		n = 3
 	case ADD, SUB:
 		n = 4

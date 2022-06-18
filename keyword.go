@@ -23,6 +23,7 @@ const (
 	DISTANCE              // 1km, 2m
 	PERCENT               // 11%
 	IDENT                 // @ident
+	RANGE                 // low .. high
 	BOOLEAN               // true | false
 	SELECTOR              // index, count, speed, etc
 	GEOMETRY_POINT        // point
@@ -44,35 +45,29 @@ const (
 	LBRACK    // [
 	RBRACE    // }
 	LBRACE    // {
+	PERIOD    // .
 
-	QUO           // /
-	MUL           // *
-	SUB           // -
-	ADD           // +
-	GEQ           // >=
-	LEQ           // <=
-	GTR           // >
-	LSS           // <
-	LAND          // &&
-	LOR           // ||
-	AND           // and
-	OR            // or
-	IN            // in
-	NOT_IN        // not in
-	EQL           // eq
-	LEQL          // ==
-	BETWEEN       // between
-	NEARBY        // nearby
-	INTERSECTS    // intersects
-	WITHIN        // within
-	INCREASE      // increase
-	DECREASE      // decrease
-	NEQ           // not eq
-	NOTBETWEEN    // not between
-	NOTNEARBY     // not nearby
-	LNEQ          // !=
-	NOTINTERSECTS // not intersects
-	NOTWITHIN     // not within
+	QUO // /
+	MUL // *
+	SUB // -
+	ADD // +
+
+	GEQ            // >=
+	LEQ            // <=
+	GTR            // >
+	LSS            // <
+	AND            // and
+	OR             // or
+	IN             // in
+	NOT_IN         // not in
+	EQL            // eq
+	LEQL           // ==
+	NEARBY         // nearby
+	INTERSECTS     // intersects
+	NOT_EQ         // not eq
+	NOT_NEARBY     // not nearby
+	LNEQ           // !=
+	NOT_INTERSECTS // not intersects
 )
 
 var keywords = map[string]Token{
@@ -81,8 +76,6 @@ var keywords = map[string]Token{
 	"when":           WHEN,
 	"repeat":         REPEAT,
 	"reset":          RESET,
-	"between":        BETWEEN,
-	"not between":    NOTBETWEEN,
 	"=":              ASSIGN,
 	";":              SEMICOLON,
 	"(":              LPAREN,
@@ -92,8 +85,6 @@ var keywords = map[string]Token{
 	"<=":             LEQ,
 	">":              GTR,
 	"<":              LSS,
-	"&&":             LAND,
-	"||":             LOR,
 	"or":             OR,
 	"and":            AND,
 	"[":              LBRACK,
@@ -107,19 +98,17 @@ var keywords = map[string]Token{
 	":":              COLON,
 	"eq":             EQL,
 	"==":             LEQL,
-	"not eq":         NEQ,
+	".":              PERIOD,
+	"not eq":         NOT_EQ,
 	"!=":             LNEQ,
 	"in":             IN,
+	"range":          RANGE,
 	"@":              IDENT,
 	"not in":         NOT_IN,
 	"nearby":         NEARBY,
-	"not nearby":     NOTNEARBY,
+	"not nearby":     NOT_NEARBY,
 	"intersects":     INTERSECTS,
-	"not intersects": NOTINTERSECTS,
-	"within":         WITHIN,
-	"not within":     NOTWITHIN,
-	"increase":       INCREASE,
-	"decrease":       DECREASE,
+	"not intersects": NOT_INTERSECTS,
 }
 
 var keywordStrings = map[Token]string{}

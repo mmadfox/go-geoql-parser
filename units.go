@@ -16,6 +16,8 @@ const (
 	Bar
 	Psi
 	Percent
+	AM
+	PM
 )
 
 type (
@@ -43,6 +45,18 @@ func (u Unit) String() (s string) {
 		s = "Bar"
 	case Psi:
 		s = "Psi"
+	case AM:
+		s = "AM"
+	case PM:
+		s = "PM"
+	}
+	return
+}
+
+func isTimeUnit(s string) (ok bool) {
+	switch s {
+	case "am", "pm", "Am", "Pm", "PM", "AM":
+		ok = true
 	}
 	return
 }

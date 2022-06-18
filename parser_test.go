@@ -13,14 +13,12 @@ func TestParseTriggerStmtWhen(t *testing.T) {
 		{
 			str: `
 TRIGGER
-SET 
-	myDevices = index{"127af1cb-ccf3-4b48-874e-4762786d3488", "127af1cb-ccf3-4b48-874e-4762786d3489"}
 WHEN 
-	(speed between 40kph .. 60kph and somekey between 1 .. 1000) 
-or @myDevices in [1,2,3]
-or abs not in [40, 60]
-repeat 34 times 4h interval 
-reset after 48h
+	tracker_time in 09:09:59 .. 09:09:59 
+	and (tracker_speed in 10kph .. 40kph
+	or tracker_speed in [10kph .. 40kph, 10kph .. 40kph, 10kph .. 40kph])
+repeat 5 times 10s interval 
+reset after 1h 
 `,
 		},
 	}
