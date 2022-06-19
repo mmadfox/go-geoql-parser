@@ -2,7 +2,6 @@ package geoqlparser
 
 import (
 	"bytes"
-	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -139,7 +138,7 @@ func (e *BinaryExpr) format(b *bytes.Buffer, padding string, inline bool) {
 	switch e.Op {
 	case AND, OR:
 		nl = true
-	case ADD, SUB, MUL, QUO:
+	case ADD, SUB, MUL, QUO, REM:
 		nospace = true
 	}
 	if !nospace {
@@ -500,7 +499,7 @@ type PercentLit struct {
 }
 
 func (e *PercentLit) format(b *bytes.Buffer, _ string, _ bool) {
-	b.WriteString(fmt.Sprintf("%.2f", e.Val))
+	formatFloat(b, e.Val)
 	b.WriteString("%")
 }
 

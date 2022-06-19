@@ -51,6 +51,7 @@ const (
 	MUL // *
 	SUB // -
 	ADD // +
+	REM // %
 
 	GEQ            // >=
 	LEQ            // <=
@@ -85,6 +86,7 @@ var keywords = map[string]Token{
 	"<=":             LEQ,
 	">":              GTR,
 	"<":              LSS,
+	"%":              REM,
 	"or":             OR,
 	"and":            AND,
 	"[":              LBRACK,

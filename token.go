@@ -122,6 +122,8 @@ func (t *Tokenizer) Scan() (tok Token, lit string) {
 		tok = SUB
 	case '*':
 		tok = MUL
+	case '%':
+		tok = REM
 	case '!':
 		nr, _ := t.next()
 		switch nr {
@@ -221,7 +223,7 @@ func (op Token) Precedence() (n int) {
 		n = 3
 	case ADD, SUB:
 		n = 4
-	case MUL, QUO:
+	case MUL, QUO, REM:
 		n = 5
 	}
 	return
