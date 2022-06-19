@@ -385,108 +385,22 @@ func (s *Scanner) digits(ch0 rune, base int, invalid *rune) (ch rune, digsep int
 
 func (s *Scanner) scanNumber(ch rune, seenDot bool) (rune, rune) {
 	base := 10         // number base
-	prefix := rune(0)  // one of 0 (decimal), '0' (0-octal), 'x', 'o', or 'b'
-	digsep := 0        // bit 0: digit present, bit 1: '_' present
 	invalid := rune(0) // invalid digit in literal, or 0
-
 	// integer part
 	var tok rune
-	var ds int
 	if !seenDot {
 		tok = Int
-		ch, ds = s.digits(ch, base, &invalid)
-		digsep |= ds
+		ch, _ = s.digits(ch, base, &invalid)
 		if ch == '.' && s.Mode&ScanFloats != 0 {
-			ch = s.next()
+			tok = Float
+			ch, _ = s.digits(s.next(), base, &invalid)
 			seenDot = true
 		}
 	}
-
-	// fractional part
-	if seenDot {
-		tok = Float
-		ch, ds = s.digits(ch, base, &invalid)
-		digsep |= ds
-	}
-
-	if digsep&1 == 0 {
-		s.error("decimal literal has no digits")
-	}
-
-	// exponent
-	if e := lower(ch); (e == 'e' || e == 'p') && s.Mode&ScanFloats != 0 {
-		switch {
-		case e == 'e' && prefix != 0 && prefix != '0':
-			s.errorf("%q exponent requires decimal mantissa", ch)
-		case e == 'p' && prefix != 'x':
-			s.errorf("%q exponent requires hexadecimal mantissa", ch)
-		}
-		ch = s.next()
-		tok = Float
-		if ch == '+' || ch == '-' {
-			ch = s.next()
-		}
-		ch, ds = s.digits(ch, 10, nil)
-		digsep |= ds
-		if ds&1 == 0 {
-			s.error("exponent has no digits")
-		}
-	} else if prefix == 'x' && tok == Float {
-		s.error("hexadecimal mantissa requires a 'p' exponent")
-	}
-
 	if tok == Int && invalid != 0 {
 		s.errorf("invalid digit %q in decimal literal", invalid)
 	}
-
-	if digsep&2 != 0 {
-		s.tokEnd = s.srcPos - s.lastCharLen // make sure token text is terminated
-		if i := invalidSep(s.TokenText()); i >= 0 {
-			s.error("'_' must separate successive digits")
-		}
-	}
-
 	return tok, ch
-}
-
-// invalidSep returns the index of the first invalid separator in x, or -1.
-func invalidSep(x string) int {
-	x1 := ' ' // prefix char, we only care if it's 'x'
-	d := '.'  // digit, one of '_', '0' (a digit), or '.' (anything else)
-	i := 0
-
-	// a prefix counts as a digit
-	if len(x) >= 2 && x[0] == '0' {
-		x1 = lower(rune(x[1]))
-		if x1 == 'x' || x1 == 'o' || x1 == 'b' {
-			d = '0'
-			i = 2
-		}
-	}
-
-	// mantissa and exponent
-	for ; i < len(x); i++ {
-		p := d // previous digit
-		d = rune(x[i])
-		switch {
-		case d == '_':
-			if p != '0' {
-				return i
-			}
-		case isDecimal(d) || x1 == 'x' && isHex(d):
-			d = '0'
-		default:
-			if p == '_' {
-				return i - 1
-			}
-			d = '.'
-		}
-	}
-	if d == '_' {
-		return len(x) - 1
-	}
-
-	return -1
 }
 
 func digitVal(ch rune) int {

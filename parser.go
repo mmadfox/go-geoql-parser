@@ -616,10 +616,6 @@ func (s *parser) parseStringLit() (expr Expr, err error) {
 }
 
 func (s *parser) parseFloatTypes() (expr Expr, err error) {
-	llen := len(s.lit) - 1
-	if s.lit[llen] == 'p' {
-		s.lit = s.lit[:llen]
-	}
 	val, err := strconv.ParseFloat(s.lit, 64)
 	if err != nil {
 		return nil, s.error()
@@ -650,7 +646,7 @@ func (s *parser) parseIntTypes() (expr Expr, err error) {
 		if s.neg {
 			intval = -intval
 		}
-		expr = &IntLit{Val: int(intval), Pos: s.t.Offset()}
+		expr = &IntLit{Val: intval, Pos: s.t.Offset()}
 	}
 
 	return
@@ -763,6 +759,16 @@ func (s *parser) parseDateTime(prefix string) (expr Expr, err error) {
 		}
 	}
 	s.next()
+	if isTimeUnitPostfix(s.lit) {
+		u := unitFromString(s.lit)
+		switch typ := expr.(type) {
+		case *TimeLit:
+			typ.U = u
+		case *DateTimeLit:
+			typ.U = u
+		}
+		s.next()
+	}
 	return
 }
 

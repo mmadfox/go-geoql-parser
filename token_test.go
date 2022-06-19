@@ -6,6 +6,15 @@ import (
 	"testing"
 )
 
+func TestFloat(t *testing.T) {
+	tokenizer := NewTokenizer(strings.NewReader("-55.751244e t"))
+	for i := 0; i < 10; i++ {
+		tok, lit := tokenizer.Scan()
+		_ = tok
+		_ = lit
+	}
+}
+
 func TestTokenizer_Scan(t *testing.T) {
 	testCases := []struct {
 		name string

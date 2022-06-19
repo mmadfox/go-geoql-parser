@@ -79,7 +79,7 @@ func isTemperatureUnit(s string) (ok bool) {
 
 func isPressureUnit(s string) (ok bool) {
 	switch s {
-	case "bar", "Bar", "Psi", "BAR", "PSI", "si":
+	case "bar", "Bar", "Psi", "BAR", "PSI", "psi":
 		ok = true
 	}
 	return
@@ -96,6 +96,14 @@ func isPercentUnit(s string) (ok bool) {
 func isSpeedUnit(s string) (ok bool) {
 	switch s {
 	case "kph", "mph", "KPH", "Kph", "Mph", "MPH":
+		ok = true
+	}
+	return
+}
+
+func isTimeUnitPostfix(s string) (ok bool) {
+	switch s {
+	case "am", "Am", "AM", "pm", "Pm", "PM":
 		ok = true
 	}
 	return
@@ -123,6 +131,10 @@ func unitFromString(in string) (out Unit) {
 		out = Bar
 	case "Psi", "PSI", "si", "psi":
 		out = Psi
+	case "am", "Am", "AM":
+		out = AM
+	case "pm", "Pm", "PM":
+		out = PM
 	}
 	return
 }

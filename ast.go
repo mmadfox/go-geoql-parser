@@ -606,15 +606,28 @@ func (e *DateLit) format(b *bytes.Buffer, _ string, _ bool) {
 type TimeLit struct {
 	Hour, Minute, Seconds int
 	Pos                   Pos
+	U                     Unit
 }
 
 func (e *TimeLit) format(b *bytes.Buffer, _ string, _ bool) {
-	b.WriteString(dt2str(e.Hour))
-	b.WriteRune(':')
-	b.WriteString(dt2str(e.Minute))
-	if e.Seconds > 0 {
+	switch e.U {
+	case AM, PM:
+		b.WriteString(strconv.Itoa(e.Hour))
 		b.WriteRune(':')
-		b.WriteString(dt2str(e.Seconds))
+		b.WriteString(dt2str(e.Minute))
+		if e.Seconds > 0 {
+			b.WriteRune(':')
+			b.WriteString(dt2str(e.Seconds))
+		}
+		b.WriteString(e.U.String())
+	default:
+		b.WriteString(dt2str(e.Hour))
+		b.WriteRune(':')
+		b.WriteString(dt2str(e.Minute))
+		if e.Seconds > 0 {
+			b.WriteRune(':')
+			b.WriteString(dt2str(e.Seconds))
+		}
 	}
 }
 
@@ -632,6 +645,7 @@ type DateTimeLit struct {
 	Year, Day, Hours, Minutes, Seconds int
 	Month                              time.Month
 	Pos                                Pos
+	U                                  Unit
 }
 
 func (e *DateTimeLit) format(b *bytes.Buffer, _ string, _ bool) {

@@ -14,7 +14,8 @@ func TestParseTriggerStmtWhen(t *testing.T) {
 			str: `
 TRIGGER
 WHEN 
-	tracker_time in 09:09:59 .. 09:09:59 
+	tracker_time in 9:01AM .. 12:12PM 
+	and tracker_temperature in 12Bar .. 44Psi
 	and (tracker_speed in 10kph .. 40kph
 	or tracker_speed in [10kph .. 40kph, 10kph .. 40kph, 10kph .. 40kph])
 repeat 5 times 10s interval 
