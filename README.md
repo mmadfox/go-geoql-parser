@@ -1,7 +1,7 @@
 # go-geoql-parser
-GeoQL parser
+Package declares the types used to represent syntax trees for GeoQL rules.
 
-# Example
+# Trigger example
 ```text
 TRIGGER
 SET
