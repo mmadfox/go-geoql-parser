@@ -40,7 +40,6 @@ func (s *parser) parse0() (stmt Statement, err error) {
 		}
 		return s.parseTriggerStmt()
 	default:
-		s.t.Offset()
 		err = s.error()
 	}
 	return
@@ -265,6 +264,8 @@ func (s *parser) parseUnaryExpr() (expr Expr, err error) {
 		expr, err = s.parseGeometryCollectionExpr()
 	case BOOLEAN:
 		expr, err = s.parseBooleanLit()
+	case WEEKDAY, MONTH:
+		expr, err = s.parseCalendarLit()
 	}
 
 	switch s.tok {
@@ -279,6 +280,59 @@ func (s *parser) parseUnaryExpr() (expr Expr, err error) {
 func (s *parser) parseVarExpr() (expr Expr, err error) {
 	s.next()
 	expr = &VarLit{ID: s.t.TokenText(), Pos: s.t.Offset()}
+	s.next()
+	return
+}
+
+func (s *parser) parseCalendarLit() (expr Expr, err error) {
+	var val int
+	switch s.tok {
+	case WEEKDAY:
+		switch s.lit {
+		case "sun":
+			val = 0
+		case "mon":
+			val = 1
+		case "tue":
+			val = 2
+		case "wed":
+			val = 3
+		case "thu":
+			val = 4
+		case "fri":
+			val = 5
+		case "sat":
+			val = 6
+		}
+	case MONTH:
+		switch s.lit {
+		case "jan":
+			val = 1
+		case "feb":
+			val = 2
+		case "mar":
+			val = 3
+		case "apr":
+			val = 4
+		case "may":
+			val = 5
+		case "jun":
+			val = 6
+		case "jul":
+			val = 7
+		case "aug":
+			val = 8
+		case "sep":
+			val = 9
+		case "oct":
+			val = 10
+		case "nov":
+			val = 11
+		case "dec":
+			val = 12
+		}
+	}
+	expr = &CalendarLit{Val: val, Pos: s.t.Offset(), Kind: s.tok}
 	s.next()
 	return
 }

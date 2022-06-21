@@ -189,6 +189,12 @@ func (t *Tokenizer) Scan() (tok Token, lit string) {
 		case "true", "up", "down", "false":
 			found = true
 			kwd = BOOLEAN
+		case "sun", "mon", "tue", "wed", "thu", "fri", "sat":
+			found = true
+			kwd = WEEKDAY
+		case "jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec":
+			found = true
+			kwd = MONTH
 		case "not":
 			found = true
 			r, s = t.next()

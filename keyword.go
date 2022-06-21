@@ -16,6 +16,8 @@ const (
 	SPEED                 // 10kmp
 	TIME                  // 11:11, 11:11:11
 	DATE                  // 2030-10-02
+	WEEKDAY               // Mon
+	MONTH                 // Jan
 	DATETIME              // 2030-10-02T11:11:11
 	DURATION              // 1h, 20s, 7h3m45s, 7h3m, 3m
 	TEMPERATURE           // -30C, +30C, -40F

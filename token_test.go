@@ -6,21 +6,22 @@ import (
 	"testing"
 )
 
-func TestFloat(t *testing.T) {
-	tokenizer := NewTokenizer(strings.NewReader("-55.751244e t"))
-	for i := 0; i < 10; i++ {
-		tok, lit := tokenizer.Scan()
-		_ = tok
-		_ = lit
-	}
-}
-
 func TestTokenizer_Scan(t *testing.T) {
 	testCases := []struct {
 		name string
 		want []Token
 		str  string
 	}{
+		{
+			name: "CALENDAR MONTH",
+			want: []Token{MONTH, MONTH, MONTH, MONTH, MONTH, MONTH, MONTH, MONTH, MONTH, MONTH, MONTH, MONTH},
+			str:  "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec",
+		},
+		{
+			name: "CALENDAR WEEKDAY",
+			want: []Token{WEEKDAY, WEEKDAY, WEEKDAY, WEEKDAY, WEEKDAY, WEEKDAY, WEEKDAY},
+			str:  "Sun Mon Tue Wed Thu Fri Sat",
+		},
 		{
 			name: "GEOMETRY",
 			want: []Token{GEOMETRY_POINT, GEOMETRY_MULTIPOINT,

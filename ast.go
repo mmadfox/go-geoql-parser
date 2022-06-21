@@ -193,6 +193,46 @@ func (e *WildcardLit) format(b *bytes.Buffer, _ string, _ bool) {
 	b.WriteRune('*')
 }
 
+type CalendarLit struct {
+	Kind Token
+	Pos  Pos
+	Val  int
+}
+
+var shortDayNames = []string{
+	"Sun",
+	"Mon",
+	"Tue",
+	"Wed",
+	"Thu",
+	"Fri",
+	"Sat",
+}
+
+var shortMonthNames = []string{
+	"Jan",
+	"Feb",
+	"Mar",
+	"Apr",
+	"May",
+	"Jun",
+	"Jul",
+	"Aug",
+	"Sep",
+	"Oct",
+	"Nov",
+	"Dec",
+}
+
+func (e *CalendarLit) format(b *bytes.Buffer, _ string, _ bool) {
+	switch e.Kind {
+	case WEEKDAY:
+		b.WriteString(shortDayNames[e.Val])
+	case MONTH:
+		b.WriteString(shortMonthNames[e.Val])
+	}
+}
+
 type GeometryPointExpr struct {
 	Val      [2]float64
 	StartPos Pos
@@ -793,3 +833,4 @@ func (e *StringLit) isExpr()                {}
 func (e *PercentLit) isExpr()               {}
 func (e *VarLit) isExpr()                   {}
 func (e *RangeExpr) isExpr()                {}
+func (e *CalendarLit) isExpr()              {}

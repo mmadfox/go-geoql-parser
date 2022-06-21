@@ -15,6 +15,7 @@ TRIGGER
 WHEN
 	tracker_point3 % 2 == 0
 	and tracker_point1 / tracker_point2 * 100 > 20%
+	and tracker_week in Sun .. Fri
 	and tracker_time in 9:01AM .. 12:12PM 
 	and tracker_temperature in 12Bar .. 44Psi
 	and (tracker_speed in 10kph .. 40kph
