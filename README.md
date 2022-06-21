@@ -56,6 +56,27 @@ RESET after 1h0m0s
   + [Variable](#variable)
 
 # Operators
+| Operator       | Precedence | Literal        |
+|----------------|------------|----------------|
+| OR             | 1          | or             |
+| AND            | 2          | and            |
+| LSS            | 3          | <              |
+| LEQ            | 3          | <=             |
+| GTR            | 3          | >              |
+| GEQ            | 3          | >=             |
+| EQL            | 3          | ==, eq         |
+| NOT EQL        | 3          | !=, not eq     |
+| IN             | 3          | in             |
+| NOT IN         | 3          | not in         |
+| INTERSECTS     | 3          | intersects     |
+| NOT INTERSECTS | 3          | not intersects |
+| NEARBY         | 3          | nearby         |
+| NOT NEARBY     | 3          | not nearby     |
+| ADD            | 4          | +              |
+| SUB            | 4          | -              |
+| MUL            | 5          | *              |
+| QUO            | 5          | /              |
+| REM            | 5          | %              |
 
 # Data Types
 | Data type            | Example                                                                                    |
