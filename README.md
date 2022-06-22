@@ -184,7 +184,7 @@ tracker_abs != true
 tracker_status == false 
 ```
 ## Speed
-This data type is used to describe the speed value with units Kph or Mph
+This data type is used to describe the SPEED value with units Kph or Mph
 ```go
 *geoqlparser.SpeedLit
 
@@ -201,8 +201,40 @@ tracker_speed in 0kph .. 120kph
 tracker_speed in [1kph .. 20kph, 40kph .. 80kph]
 ```
 ## Integer
+This data type is used to describe the INTEGER value. 
+The size of the generic int type is platform dependent. It is 32 bits wide on a 32-bit system and 64-bits wide on a 64-bit system.
+```go
+*geoqlparser.IntLit
+```
+Example:
+```go
+some_selector > 100
+1+2 == 3
+h3_idx_selector{*, "786d9e27-f277-4d5d-b658-3198c133c43d"}:1,2 in [1, 2]
+```
+
 ## Float
+This data type is used to describe the FLOAT value.
+```go
+*geoqlparser.FloatLit
+```
+Example:
+```text
+tracker_pid_value >= 33.3455
+tracker_coords intersects point[-74.232423423, 54.455644]
+```
+
 ## String
+This data type is used to describe the STRING value.
+```go
+*geoqlparser.StringLit
+```
+Example:
+```text
+tracker_status == "Y" or tracker_status == "Valid"
+tracker_model eq "ER54x3"
+```
+
 ## Duration
 ## Distance
 ## Temperature
