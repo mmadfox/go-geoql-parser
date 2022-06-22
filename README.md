@@ -112,6 +112,54 @@ RESET after 1h0m0s
 
 
 ## Selector
+```go
+ *geoqlparser.SelectorExpr
+
+type SelectorExpr struct {
+    Ident    string              // selector name
+    Args     map[string]struct{} // device ids
+    Wildcard bool                // indicates the current device
+    Props    []Expr              // some props
+}
+```
+This data type is used to match values from INPUT data.
+
+- valid characters: *a-zA-Z_0-9*
+- min length: *1*
+- max length: *64*
+
+### Get some value from current device
+wildcard - indicates the current device
+```text
+tracker_speed{*} in 1mph .. 40mph 
+tracker_index1{*} in 1 .. 10
+someTextToo{*} in 1mph .. 40mph 
+```
+the same, but shorter
+```text
+tracker_speed in 1mph .. 40mph 
+tracker_index1 in 1 .. 10
+someTextToo in 1mph .. 40mph 
+```
+### Get some value from devices by their IDs
+```text
+tracker_speed{"786d9e27-f277-4d5d-b658-3198c133c43d", "786d9e27-f277-4d5d-b658-3198c133c43b"} in 1mph .. 40mph
+```
+### Get some values from current device and from devices by their IDs
+```text
+tracker_speed{*, "786d9e27-f277-4d5d-b658-3198c133c43d", "786d9e27-f277-4d5d-b658-3198c133c43b"} in 1mph .. 40mph
+```
+
+### Properties
+##### selector :prop1,...,propN
+Example:
+```text
+tracker_coords:1km // radius 1km
+coords{*}:1km,2km  // radius 1km or 2km
+someIndex:1,2,3    // some index 
+ads:2,6            // some index too
+```
+
 ## Wildcard
 ## Boolean
 ## Speed

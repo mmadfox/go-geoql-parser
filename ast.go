@@ -704,10 +704,10 @@ func (e *DateTimeLit) format(b *bytes.Buffer, _ string, _ bool) {
 }
 
 type SelectorExpr struct {
-	Ident    string
-	Args     map[string]struct{}
-	Wildcard bool
-	Props    []Expr
+	Ident    string              // selector name
+	Args     map[string]struct{} // device ids
+	Wildcard bool                // indicates the current device
+	Props    []Expr              // some props
 	StartPos Pos
 	EndPos   Pos
 }
