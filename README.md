@@ -112,6 +112,8 @@ RESET after 1h0m0s
 
 
 ## Selector
+This data type is used to match values from INPUT data.
+
 ```go
  *geoqlparser.SelectorExpr
 
@@ -122,7 +124,6 @@ type SelectorExpr struct {
     Props    []Expr              // some props
 }
 ```
-This data type is used to match values from INPUT data.
 
 - valid characters: *a-zA-Z_0-9*
 - min length: *1*
@@ -161,8 +162,44 @@ ads:2,6            // some index too
 ```
 
 ## Wildcard
+This data type is used to indicate the current device
+```go
+*geoqlparser.WildcardLit
+```
+Example:
+```text
+selector{*}
+someSelector{*, "786d9e27-f277-4d5d-b658-3198c133c43d"}
+```
 ## Boolean
+This data type is used to describe the boolean value TRUE or FALSE
+```go
+*geoqlparser.BooleanLit
+```
+Example:
+```text
+tracker_status eq true
+tracker_status not eq false 
+tracker_abs != true
+tracker_status == false 
+```
 ## Speed
+This data type is used to describe the speed value with units Kph or Mph
+```go
+*geoqlparser.SpeedLit
+
+type SpeedLit struct {
+    Val float64
+    U   Unit    // kph, mph
+}
+```
+Example:
+```text
+tracker_speed > 1.1Kph
+tracker_speed in 0kph .. 120kph
+// if the speed falls into one or the second range
+tracker_speed in [1kph .. 20kph, 40kph .. 80kph]
+```
 ## Integer
 ## Float
 ## String
