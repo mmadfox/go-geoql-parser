@@ -184,15 +184,14 @@ tracker_abs != true
 tracker_status == false 
 ```
 ## Speed
-This data type is used to describe the SPEED value with units Kph or Mph
+This data type is used to describe the SPEED value 
 ```go
 *geoqlparser.SpeedLit
-
-type SpeedLit struct {
-    Val float64
-    U   Unit    // kph, mph
-}
 ```
+Unit of measurement:
+- Kilometer/hour: Kph
+- Mile/hour: Mph
+
 Example:
 ```text
 tracker_speed > 1.1Kph
@@ -214,7 +213,7 @@ h3_idx_selector{*, "786d9e27-f277-4d5d-b658-3198c133c43d"}:1,2 in [1, 2]
 ```
 
 ## Float
-This data type is used to describe the FLOAT value.
+This data type is used to describe the FLOAT value
 ```go
 *geoqlparser.FloatLit
 ```
@@ -225,7 +224,7 @@ tracker_coords intersects point[-74.232423423, 54.455644]
 ```
 
 ## String
-This data type is used to describe the STRING value.
+This data type is used to describe the STRING value
 ```go
 *geoqlparser.StringLit
 ```
@@ -236,13 +235,163 @@ tracker_model eq "ER54x3"
 ```
 
 ## Duration
+This data type is used to describe the DURATION value
+```go
+*geoqlparser.DurationLit
+```
+
+1h, 20s, 7h3m45s, 7h3m, 3m
+
+- hours: 1h, 2h, 24h
+- minutes: 7m, 5m, 1m
+- seconds: 1s, 10s, 45s
+
+Example:
+```text
+tracker_some_select in 1h .. 2h
+tracker_some_select in [1s .. 30s, 40s .. 60s]
+tracker_some_select > 7h3m
+tracker_some_select < 7h3m45s 
+```
+
 ## Distance
+This data type is used to describe the DISTANCE value
+```go
+*geoqlparser.DistanceLit
+```
+
+Unit of measurement:
+ - Kilometers: Km
+ - Meters: m
+
+Example:
+```text
+tracker_radius > 40Km
+tracker_radius in [1m, 100m, 1000m]
+tracker_radius in 40Km .. 45Km
+```
+
 ## Temperature
+This data type is used to describe the TEMPERATURE value
+```go
+*geoqlparser.TemperatureLit
+```
+Unit of measurement:
+- Celsius: C
+- Fahrenheit: F
+
+Example:
+```text
+tracker_temperature in +34C .. -15C
+tracker_temperature >= 0C and tracker_temperature < -5C
+```
+
 ## Pressure
+This data type is used to describe the PRESSURE value
+```go
+*geoqlparser.PressureLit
+```
+Unit of measurement:
+- Psi
+- Bar
+
+Psi and Bar are units of measurement of pressure. The key difference between psi and bar is that psi measures the pressure as the one-pound force applied on an area of one square inch whereas bar measures the pressure as a force applied perpendicularly on a unit area of a surface.
+
+Example:
+```text
+tracker_some_val in 1.1Bar .. 20Bar
+tracker_some_val < 40Psi
+```
+
 ## GeometryPoint
+This data type is used to describe the GEOMETRY POINT value is a single position
+
+Each value represents a float type
+```go
+*geoqlparser.GeometryPointExpr
+
+type GeometryPointExpr struct {
+    Val      [2]float64
+    // ...	
+}
+```
+
+Example:
+
+tracker_coords - selector for longitude and latitude current device
+```text
+tracker_coords intersects point[114.60937499999999, 69.90011762668541]
+```
+
 ## GeometryMultiPoint
+This data type is used to describe the GEOMETRY MULTI POINT values is an array of positions
+
+Each value represents a float type
+
+```go
+*geoqlparser.GeometryMultiPointExpr
+
+type GeometryMultiPointExpr struct {
+    Val      [][2]float64
+}
+```
+
+Example:
+
+tracker_coords - selector for longitude and latitude current device
+```text
+tracker_coords intersects multipoint[
+    [114.60937499999999,69.90011762668541], 
+    [124.1015625, 68.39918004344189], 
+    [ 113.5546875, 66.65297740055279]]
+```
+
 ## GeometryLine
+This data type is used to describe the GEOMETRY LINE values is an array of two or
+more positions
+
+Each value represents a float type
+```go
+*geoqlparser.GeometryLineExpr
+
+type GeometryLineExpr struct {
+    Val      [][2]float64
+}
+```
+Example:
+
+tracker_coords - selector for longitude and latitude current device
+
+```text
+tracker_coords intersects line[[38.3203125,60.413852350464914], [69.60937499999999,51.6180165487737]]
+tracker_coords intersects line[[38.3203125,60.413852350464914], [69.60937499999999,51.6180165487737], [83.3203125,30.751277776257812]]
+```
+
 ## GeometryMultiLine
+This data type is used to describe the GEOMETRY MULTI LINE values is an array of
+line coordinate arrays
+
+Each value represents a float type
+
+```go
+*geoqlparser.GeometryMultiLineExpr
+
+type GeometryMultiLineExpr struct {
+    Val      [][][2]float64
+}
+```
+
+Example:
+
+tracker_coords - selector for longitude and latitude current device
+
+```text
+tracker_coords intersects multiline[
+    [[38.3203125,60.413852350464914], [69.60937499999999,51.6180165487737]],
+    [[38.3203125,60.413852350464914], [69.60937499999999,51.6180165487737]]
+]
+```
+
 ## GeometryPolygon
 ## GeometryMultiPolygon
 ## GeometryCircle
