@@ -10,31 +10,31 @@ const (
 	REPEAT  // repeat
 	RESET   // reset
 
-	INT                   // 1
-	FLOAT                 // 1.1
-	STRING                // "1"
-	SPEED                 // 10kmp
-	TIME                  // 11:11, 11:11:11
-	DATE                  // 2030-10-02
-	WEEKDAY               // Mon
-	MONTH                 // Jan
-	DATETIME              // 2030-10-02T11:11:11
-	DURATION              // 1h, 20s, 7h3m45s, 7h3m, 3m
-	TEMPERATURE           // -30C, +30C, -40F
-	PRESSURE              // 2.2bar, 2.2psi
-	DISTANCE              // 1km, 2m
-	PERCENT               // 11%
-	IDENT                 // @ident
-	RANGE                 // low .. high
-	BOOLEAN               // true | false
-	SELECTOR              // index, count, speed, etc
+	INT         // 1
+	FLOAT       // 1.1
+	STRING      // "1"
+	SPEED       // 10kmp
+	TIME        // 11:11, 11:11:11
+	DATE        // 2030-10-02
+	WEEKDAY     // Mon
+	MONTH       // Jan
+	DATETIME    // 2030-10-02T11:11:11
+	DURATION    // 1h, 20s, 7h3m45s, 7h3m, 3m
+	TEMPERATURE // -30C, +30C, -40F
+	PRESSURE    // 2.2bar, 2.2psi
+	DISTANCE    // 1km, 2m
+	PERCENT     // 11%
+	IDENT       // @ident
+	RANGE       // low .. high
+	BOOLEAN     // true | false
+	SELECTOR    // index, count, speed, etc
+
 	GEOMETRY_POINT        // point
-	GEOMETRY_MULTIPOINT   // multipoint
 	GEOMETRY_LINE         // line
-	GEOMETRY_MULTILINE    // multiline
 	GEOMETRY_POLYGON      // polygon
+	GEOMETRY_MULTILINE    // multiline
+	GEOMETRY_MULTIPOINT   // multipoint
 	GEOMETRY_MULTIPOLYGON // multipolygon
-	GEOMETRY_CIRCLE       // multipolygon
 	GEOMETRY_COLLECTION   // collection
 
 	ASSIGN    // =

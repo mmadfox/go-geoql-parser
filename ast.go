@@ -235,11 +235,12 @@ func (e *CalendarLit) format(b *bytes.Buffer, _ string, _ bool) {
 
 type GeometryPointExpr struct {
 	Val      [2]float64
+	Radius   *DistanceLit
 	StartPos Pos
 	EndPos   Pos
 }
 
-func (e *GeometryPointExpr) format(b *bytes.Buffer, _ string, _ bool) {
+func (e *GeometryPointExpr) format(b *bytes.Buffer, padding string, inline bool) {
 	b.WriteString("point")
 	b.WriteRune('[')
 	formatFloat(b, e.Val[0])
@@ -247,36 +248,46 @@ func (e *GeometryPointExpr) format(b *bytes.Buffer, _ string, _ bool) {
 	b.WriteRune(' ')
 	formatFloat(b, e.Val[1])
 	b.WriteRune(']')
+	if e.Radius != nil {
+		b.WriteRune(':')
+		e.Radius.format(b, padding, inline)
+	}
 }
 
-type GeometryMultiPointExpr struct {
-	Val      [][2]float64
+type GeometryMultiObject struct {
+	Kind     Token
+	Val      []Expr
 	StartPos Pos
 	EndPos   Pos
 }
 
-func (e *GeometryMultiPointExpr) format(b *bytes.Buffer, padding string, inline bool) {
-	b.WriteString("multipoint")
+func (e *GeometryMultiObject) format(b *bytes.Buffer, padding string, inline bool) {
+	switch e.Kind {
+	case GEOMETRY_MULTIPOINT:
+		b.WriteString("multipoint")
+	case GEOMETRY_MULTILINE:
+		b.WriteString("multiline")
+	case GEOMETRY_MULTIPOLYGON:
+		b.WriteString("multipolygon")
+	}
 	b.WriteRune('[')
-	var pad2 string
+	pad2 := padding + "\t"
 	for i := 0; i < len(e.Val); i++ {
 		if !inline {
-			pad2 = padding + "\t"
 			b.WriteRune('\n')
-			b.WriteString(pad2)
+			if e.Kind == GEOMETRY_MULTIPOINT {
+				b.WriteString(pad2)
+			} else {
+				b.WriteString(padding)
+			}
 		}
-		b.WriteRune('[')
-		formatFloat(b, e.Val[i][0])
-		b.WriteRune(',')
-		b.WriteRune(' ')
-		formatFloat(b, e.Val[i][1])
-		b.WriteRune(']')
+		e.Val[i].format(b, padding, inline)
 		if i+1 < len(e.Val) {
 			b.WriteRune(',')
 			b.WriteRune(' ')
 		}
 	}
-	if !inline {
+	if !inline && e.Kind == GEOMETRY_MULTIPOINT {
 		b.WriteRune('\n')
 		b.WriteString(padding)
 	}
@@ -285,6 +296,7 @@ func (e *GeometryMultiPointExpr) format(b *bytes.Buffer, padding string, inline 
 
 type GeometryLineExpr struct {
 	Val      [][2]float64
+	Margin   *DistanceLit
 	StartPos Pos
 	EndPos   Pos
 }
@@ -317,122 +329,24 @@ func (e *GeometryLineExpr) format(b *bytes.Buffer, padding string, inline bool) 
 		b.WriteString(padding)
 	}
 	b.WriteRune(']')
+	if e.Margin != nil {
+		b.WriteRune(':')
+		e.Margin.format(b, padding, inline)
+	}
 }
 
-type GeometryMultiLineExpr struct {
+type GeometryPolygonExpr struct {
 	Val      [][][2]float64
 	StartPos Pos
 	EndPos   Pos
 }
 
-func (e *GeometryMultiLineExpr) format(b *bytes.Buffer, padding string, inline bool) {
-	b.WriteString("multiline")
-	b.WriteRune('[')
-	var pad2, pad3 string
-	if !inline {
-		pad2 = padding + "\t"
-		pad3 = padding + "\t\t"
-		b.WriteRune('\n')
-		b.WriteString(pad2)
-	}
-	for i := 0; i < len(e.Val); i++ {
-		b.WriteRune('[')
-		for j := 0; j < len(e.Val[i]); j++ {
-			if !inline {
-				b.WriteRune('\n')
-				b.WriteString(pad3)
-			}
-			b.WriteRune('[')
-			formatFloat(b, e.Val[i][j][0])
-			b.WriteRune(',')
-			b.WriteRune(' ')
-			formatFloat(b, e.Val[i][j][1])
-			b.WriteRune(']')
-			if j+1 < len(e.Val[i]) {
-				b.WriteRune(',')
-				b.WriteRune(' ')
-			}
-		}
-		if !inline {
-			b.WriteRune('\n')
-			b.WriteString(pad2)
-		}
-		b.WriteRune(']')
-		if i+1 < len(e.Val) {
-			b.WriteRune(',')
-			b.WriteRune(' ')
-		}
-	}
-	if !inline {
-		b.WriteRune('\n')
-		b.WriteString(padding)
-	}
-	b.WriteRune(']')
-}
-
-type GeometryPolygonExpr struct {
-	Val      [][2]float64
-	StartPos Pos
-	EndPos   Pos
+func (e *GeometryPolygonExpr) HasHoles() bool {
+	return len(e.Val) > 1
 }
 
 func (e *GeometryPolygonExpr) format(b *bytes.Buffer, padding string, inline bool) {
 	b.WriteString("polygon")
-	b.WriteRune('[')
-	var pad2 string
-	if !inline {
-		pad2 = padding + "\t"
-	}
-	for i := 0; i < len(e.Val); i++ {
-		if !inline {
-			b.WriteRune('\n')
-			b.WriteString(pad2)
-		}
-		b.WriteRune('[')
-		formatFloat(b, e.Val[i][0])
-		b.WriteRune(',')
-		b.WriteRune(' ')
-		formatFloat(b, e.Val[i][1])
-		b.WriteRune(']')
-		if i+1 < len(e.Val) {
-			b.WriteRune(',')
-			b.WriteRune(' ')
-		}
-	}
-	if !inline {
-		b.WriteRune('\n')
-		b.WriteString(padding)
-	}
-	b.WriteRune(']')
-}
-
-type GeometryCircleExpr struct {
-	Val      [2]float64
-	Radius   *DistanceLit
-	StartPos Pos
-	EndPos   Pos
-}
-
-func (e *GeometryCircleExpr) format(b *bytes.Buffer, padding string, inline bool) {
-	b.WriteString("circle")
-	b.WriteRune('[')
-	formatFloat(b, e.Val[0])
-	b.WriteRune(',')
-	b.WriteRune(' ')
-	formatFloat(b, e.Val[1])
-	b.WriteRune(']')
-	b.WriteRune(':')
-	e.Radius.format(b, padding, inline)
-}
-
-type GeometryMultiPolygonExpr struct {
-	Val      [][][2]float64
-	StartPos Pos
-	EndPos   Pos
-}
-
-func (e *GeometryMultiPolygonExpr) format(b *bytes.Buffer, padding string, inline bool) {
-	b.WriteString("multipolygon")
 	b.WriteRune('[')
 	var pad2, pad3 string
 	if !inline {
@@ -798,39 +712,35 @@ func (e *BooleanLit) format(b *bytes.Buffer, _ string, _ bool) {
 func IsGeometryExpr(expr Expr) (ok bool) {
 	switch expr.(type) {
 	case *GeometryPointExpr, *GeometryCollectionExpr,
-		*GeometryCircleExpr, *GeometryPolygonExpr, *GeometryMultiPolygonExpr,
-		*GeometryMultiLineExpr, *GeometryMultiPointExpr, *GeometryLineExpr:
+		*GeometryMultiObject, *GeometryPolygonExpr, *GeometryLineExpr:
 		ok = true
 	}
 	return
 }
 
-func (e *BinaryExpr) isExpr()               {}
-func (e *ParenExpr) isExpr()                {}
-func (e *SelectorExpr) isExpr()             {}
-func (e *WildcardLit) isExpr()              {}
-func (e *BooleanLit) isExpr()               {}
-func (e *SpeedLit) isExpr()                 {}
-func (e *IntLit) isExpr()                   {}
-func (e *FloatLit) isExpr()                 {}
-func (e *DurationLit) isExpr()              {}
-func (e *DistanceLit) isExpr()              {}
-func (e *TemperatureLit) isExpr()           {}
-func (e *PressureLit) isExpr()              {}
-func (e *GeometryPointExpr) isExpr()        {}
-func (e *GeometryMultiPointExpr) isExpr()   {}
-func (e *GeometryLineExpr) isExpr()         {}
-func (e *GeometryMultiLineExpr) isExpr()    {}
-func (e *GeometryPolygonExpr) isExpr()      {}
-func (e *GeometryMultiPolygonExpr) isExpr() {}
-func (e *GeometryCircleExpr) isExpr()       {}
-func (e *GeometryCollectionExpr) isExpr()   {}
-func (e *DateLit) isExpr()                  {}
-func (e *TimeLit) isExpr()                  {}
-func (e *DateTimeLit) isExpr()              {}
-func (e *ArrayExpr) isExpr()                {}
-func (e *StringLit) isExpr()                {}
-func (e *PercentLit) isExpr()               {}
-func (e *VarLit) isExpr()                   {}
-func (e *RangeExpr) isExpr()                {}
-func (e *CalendarLit) isExpr()              {}
+func (e *BinaryExpr) isExpr()             {}
+func (e *ParenExpr) isExpr()              {}
+func (e *SelectorExpr) isExpr()           {}
+func (e *WildcardLit) isExpr()            {}
+func (e *BooleanLit) isExpr()             {}
+func (e *SpeedLit) isExpr()               {}
+func (e *IntLit) isExpr()                 {}
+func (e *FloatLit) isExpr()               {}
+func (e *DurationLit) isExpr()            {}
+func (e *DistanceLit) isExpr()            {}
+func (e *TemperatureLit) isExpr()         {}
+func (e *PressureLit) isExpr()            {}
+func (e *GeometryPointExpr) isExpr()      {}
+func (e *GeometryLineExpr) isExpr()       {}
+func (e *GeometryPolygonExpr) isExpr()    {}
+func (e *GeometryMultiObject) isExpr()    {}
+func (e *GeometryCollectionExpr) isExpr() {}
+func (e *DateLit) isExpr()                {}
+func (e *TimeLit) isExpr()                {}
+func (e *DateTimeLit) isExpr()            {}
+func (e *ArrayExpr) isExpr()              {}
+func (e *StringLit) isExpr()              {}
+func (e *PercentLit) isExpr()             {}
+func (e *VarLit) isExpr()                 {}
+func (e *RangeExpr) isExpr()              {}
+func (e *CalendarLit) isExpr()            {}

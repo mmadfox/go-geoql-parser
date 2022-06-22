@@ -180,9 +180,6 @@ func (t *Tokenizer) Scan() (tok Token, lit string) {
 		case "multipolygon":
 			found = true
 			kwd = GEOMETRY_MULTIPOLYGON
-		case "circle":
-			found = true
-			kwd = GEOMETRY_CIRCLE
 		case "collection":
 			found = true
 			kwd = GEOMETRY_COLLECTION

@@ -1,7 +1,6 @@
 package geoqlparser
 
 import (
-	"log"
 	"testing"
 )
 
@@ -14,7 +13,51 @@ func TestParseTriggerStmtWhen(t *testing.T) {
 			str: `
 TRIGGER
 SET
-    someplace = multipoint[[1.1,1.1],[-2.1, 2.1]]  
+	somepoly = polygon[[[1.1,1.1], [1.1,1.1], [1.1,1.1]], [[1.1,1.1], [1.1,1.1], [1.1,1.1]]]
+	somepoint = point[1.1,1.1]
+	somecircle = point[1.2, 3.3]:500m
+	someline  = line[[1.1,1.1], [1.1,1.1], [1.1,1.1]]
+	someline2  = line[[1.1,1.1], [1.1,1.1], [1.1,1.1]]:1km
+	somemultiline = multiline[
+        line[[1.1,1.1], [1.1,1.1], [1.1,1.1]],
+		line[[1.1,1.1], [1.1,1.1], [1.1,1.1]],
+		line[[1.1,1.1], [1.1,1.1], [1.1,1.1]],
+		line[[1.1,1.1], [1.1,1.1], [1.1,1.1]]
+	]
+	somemultipoly = multipolygon[
+	   	polygon[[[1.1,1.1], [1.1,1.1], [1.1,1.1]], [[1.1,1.1], [1.1,1.1], [1.1,1.1]]],
+		polygon[[[1.1,1.1], [1.1,1.1], [1.1,1.1]]],
+		polygon[[[1.1,1.1], [1.1,1.1], [1.1,1.1]], [[1.1,1.1], [1.1,1.1], [1.1,1.1]]]
+	]
+    somemultipoint = multipoint[
+point[1.1,1.1],
+point[1.1,1.1],
+point[1.1,1.1],
+point[1.1,1.1]:400m
+    ]
+	somecoll = collection[
+        multipoint[
+point[1.1,1.1],
+point[1.1,1.1],
+point[1.1,1.1],
+point[1.1,1.1]:400m
+    ],
+multipolygon[
+	   	polygon[[[1.1,1.1], [1.1,1.1], [1.1,1.1]], [[1.1,1.1], [1.1,1.1], [1.1,1.1]]],
+		polygon[[[1.1,1.1], [1.1,1.1], [1.1,1.1]]],
+		polygon[[[1.1,1.1], [1.1,1.1], [1.1,1.1]], [[1.1,1.1], [1.1,1.1], [1.1,1.1]]]
+	],
+multiline[
+        line[[1.1,1.1], [1.1,1.1], [1.1,1.1]],
+		line[[1.1,1.1], [1.1,1.1], [1.1,1.1]],
+		line[[1.1,1.1], [1.1,1.1], [1.1,1.1]],
+		line[[1.1,1.1], [1.1,1.1], [1.1,1.1]]
+	],
+polygon[[[1.1,1.1], [1.1,1.1], [1.1,1.1]], [[1.1,1.1], [1.1,1.1], [1.1,1.1]]],
+point[1.1,1.1],
+line[[1.1,1.1], [1.1,1.1], [1.1,1.1]],
+line[[1.1,1.1], [1.1,1.1], [1.1,1.1]]:1km
+    ]
 WHEN
 	tracker_point3 % 2 == 0
 	and tracker_cords intersects @someplace
@@ -32,7 +75,6 @@ reset after 1h
 	// TODO:
 	for _, tc := range testCases {
 		stmt, err := Parse(tc.str)
-		log.Println(stmt)
 		if tc.err {
 			if err == nil {
 				t.Fatalf("got nil, expected error")

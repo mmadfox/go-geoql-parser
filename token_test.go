@@ -26,8 +26,8 @@ func TestTokenizer_Scan(t *testing.T) {
 			name: "GEOMETRY",
 			want: []Token{GEOMETRY_POINT, GEOMETRY_MULTIPOINT,
 				GEOMETRY_LINE, GEOMETRY_MULTILINE,
-				GEOMETRY_POLYGON, GEOMETRY_MULTIPOLYGON, GEOMETRY_CIRCLE, GEOMETRY_COLLECTION},
-			str: "point multipoint line multiline polygon multipolygon circle collection",
+				GEOMETRY_POLYGON, GEOMETRY_MULTIPOLYGON, GEOMETRY_COLLECTION},
+			str: "point multipoint line multiline polygon multipolygon collection",
 		},
 		{
 			name: "SELECTOR RANGE",

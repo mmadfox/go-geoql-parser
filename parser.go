@@ -256,10 +256,10 @@ func (s *parser) parseUnaryExpr() (expr Expr, err error) {
 		expr, err = s.parseIntTypes()
 	case STRING:
 		expr, err = s.parseStringLit()
-	case GEOMETRY_POINT, GEOMETRY_MULTIPOINT,
-		GEOMETRY_LINE, GEOMETRY_MULTILINE,
-		GEOMETRY_POLYGON, GEOMETRY_CIRCLE, GEOMETRY_MULTIPOLYGON:
+	case GEOMETRY_POINT, GEOMETRY_LINE, GEOMETRY_POLYGON:
 		expr, err = s.parseGeometryExpr()
+	case GEOMETRY_MULTIPOINT, GEOMETRY_MULTILINE, GEOMETRY_MULTIPOLYGON:
+		expr, err = s.parseGeometryMultiObject()
 	case GEOMETRY_COLLECTION:
 		expr, err = s.parseGeometryCollectionExpr()
 	case BOOLEAN:
@@ -461,6 +461,60 @@ func (s *parser) parseArrayExpr() (expr Expr, err error) {
 	return arrayExpr, nil
 }
 
+func (s *parser) parseGeometryMultiObject() (expr Expr, err error) {
+	geotyp := s.tok
+	s.next()
+	if !s.except(LBRACK) {
+		return nil, s.error()
+	}
+	s.next()
+	multiobj := &GeometryMultiObject{
+		Kind:     geotyp,
+		Val:      make([]Expr, 0),
+		StartPos: s.t.Offset(),
+	}
+	for {
+		if !isGeometryToken(s.tok) {
+			break
+		}
+		object, oer := s.parseGeometryExpr()
+		if oer != nil {
+			return nil, oer
+		}
+		switch typ := object.(type) {
+		default:
+			return nil, s.error()
+		case *GeometryPointExpr:
+			if multiobj.Kind != GEOMETRY_MULTIPOINT {
+				return nil, s.error()
+			}
+			multiobj.Val = append(multiobj.Val, typ)
+		case *GeometryLineExpr:
+			if multiobj.Kind != GEOMETRY_MULTILINE {
+				return nil, s.error()
+			}
+			multiobj.Val = append(multiobj.Val, typ)
+		case *GeometryPolygonExpr:
+			if multiobj.Kind != GEOMETRY_MULTIPOLYGON {
+				return nil, s.error()
+			}
+			multiobj.Val = append(multiobj.Val, typ)
+		}
+		if s.except(RBRACK) {
+			s.next()
+			break
+		}
+		if s.except(COMMA) {
+			s.next()
+		}
+	}
+	multiobj.EndPos = s.t.Offset()
+	if len(multiobj.Val) == 0 {
+		return nil, s.error()
+	}
+	return multiobj, nil
+}
+
 func (s *parser) parseGeometryCollectionExpr() (expr Expr, err error) {
 	collection := &GeometryCollectionExpr{
 		Objects:  make([]Expr, 0),
@@ -475,7 +529,14 @@ func (s *parser) parseGeometryCollectionExpr() (expr Expr, err error) {
 		if !isGeometryToken(s.tok) {
 			break
 		}
-		object, oer := s.parseGeometryExpr()
+		var object Expr
+		var oer error
+		switch s.tok {
+		default:
+			object, oer = s.parseGeometryExpr()
+		case GEOMETRY_MULTIPOINT, GEOMETRY_MULTILINE, GEOMETRY_MULTIPOLYGON:
+			object, oer = s.parseGeometryMultiObject()
+		}
 		if oer != nil {
 			return nil, oer
 		}
@@ -496,7 +557,7 @@ func (s *parser) parseGeometryCollectionExpr() (expr Expr, err error) {
 }
 
 func (s *parser) parseGeometryExpr() (expr Expr, err error) {
-	geojsontyp := s.tok
+	geomtyp := s.tok
 	sp := s.t.Offset()
 	s.next()
 	if !s.except(LBRACK) {
@@ -607,48 +668,63 @@ func (s *parser) parseGeometryExpr() (expr Expr, err error) {
 		}
 		s.neg = false
 	}
-	switch geojsontyp {
+	switch geomtyp {
 	case GEOMETRY_POINT:
-		return &GeometryPointExpr{Val: aa, StartPos: sp, EndPos: s.t.Offset()}, nil
-	case GEOMETRY_MULTIPOINT:
-		return &GeometryMultiPointExpr{Val: bb, StartPos: sp, EndPos: s.t.Offset()}, nil
-	case GEOMETRY_LINE:
-		return &GeometryLineExpr{Val: bb, StartPos: sp, EndPos: s.t.Offset()}, nil
-	case GEOMETRY_MULTILINE:
-		return &GeometryMultiLineExpr{Val: cc, StartPos: sp, EndPos: s.t.Offset()}, nil
-	case GEOMETRY_POLYGON:
-		return &GeometryPolygonExpr{Val: bb, StartPos: sp, EndPos: s.t.Offset()}, nil
-	case GEOMETRY_MULTIPOLYGON:
-		return &GeometryMultiPolygonExpr{Val: cc, StartPos: sp, EndPos: s.t.Offset()}, nil
-	case GEOMETRY_CIRCLE:
+		point := &GeometryPointExpr{Val: aa, StartPos: sp, EndPos: s.t.Offset()}
 		if !s.except(COLON) {
-			return nil, s.error()
+			return point, nil
 		}
-		s.next()
-		switch s.tok {
-		case INT:
-			re, err := s.parseIntTypes()
-			if err != nil {
-				return nil, err
-			}
-			distLit, ok := re.(*DistanceLit)
-			if !ok {
-				return nil, s.error()
-			}
-			return &GeometryCircleExpr{Val: aa, Radius: distLit, StartPos: sp, EndPos: s.t.Offset()}, nil
-		case FLOAT:
-			re, err := s.parseFloatTypes()
-			if err != nil {
-				return nil, err
-			}
-			distLit, ok := re.(*DistanceLit)
-			if !ok {
-				return nil, s.error()
-			}
-			return &GeometryCircleExpr{Val: aa, Radius: distLit, StartPos: sp, EndPos: s.t.Offset()}, nil
+		// point with margin
+		radius, err := s.parseDistance()
+		if err != nil {
+			return nil, err
 		}
+		point.Radius = radius
+		point.EndPos = s.t.Offset()
+		return point, nil
+	case GEOMETRY_LINE:
+		line := &GeometryLineExpr{Val: bb, StartPos: sp, EndPos: s.t.Offset()}
+		if !s.except(COLON) {
+			return line, nil
+		}
+		// line with margin
+		margin, err := s.parseDistance()
+		if err != nil {
+			return nil, err
+		}
+		line.Margin = margin
+		line.EndPos = s.t.Offset()
+		return line, nil
+	case GEOMETRY_POLYGON:
+		return &GeometryPolygonExpr{Val: cc, StartPos: sp, EndPos: s.t.Offset()}, nil
 	}
 	err = s.error()
+	return
+}
+
+func (s *parser) parseDistance() (dist *DistanceLit, err error) {
+	s.next()
+	var ok bool
+	switch s.tok {
+	case INT:
+		re, err := s.parseIntTypes()
+		if err != nil {
+			return nil, err
+		}
+		dist, ok = re.(*DistanceLit)
+		if !ok {
+			return nil, s.error()
+		}
+	case FLOAT:
+		re, err := s.parseFloatTypes()
+		if err != nil {
+			return nil, err
+		}
+		dist, ok = re.(*DistanceLit)
+		if !ok {
+			return nil, s.error()
+		}
+	}
 	return
 }
 
@@ -1012,8 +1088,7 @@ func isGeometryToken(tok Token) (ok bool) {
 	switch tok {
 	case GEOMETRY_POINT, GEOMETRY_MULTIPOINT,
 		GEOMETRY_LINE, GEOMETRY_MULTILINE,
-		GEOMETRY_POLYGON, GEOMETRY_MULTIPOLYGON,
-		GEOMETRY_CIRCLE:
+		GEOMETRY_POLYGON, GEOMETRY_MULTIPOLYGON:
 		ok = true
 	}
 	return
