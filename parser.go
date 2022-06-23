@@ -271,7 +271,7 @@ func (s *parser) parseUnaryExpr() (expr Expr, err error) {
 		expr, err = s.parseCalendarLit()
 	}
 
-	if err != nil {
+	if err == nil {
 		switch s.tok {
 		case RANGE:
 			expr, err = s.parseRangeExpr(expr)
@@ -405,7 +405,7 @@ func (s *parser) parseArrayExpr() (expr Expr, err error) {
 			arrayExpr = &ArrayExpr{lpos: startPos, List: make([]Expr, 0), Kind: ILLEGAL}
 		}
 
-		switch expr.(type) {
+		switch typ := expr.(type) {
 		default:
 			err = s.error()
 		case *DateTimeLit:
@@ -451,7 +451,7 @@ func (s *parser) parseArrayExpr() (expr Expr, err error) {
 			err = checkKind(arrayExpr.Kind, RANGE)
 			arrayExpr.Kind = RANGE
 		case *CalendarLit:
-			switch s.tok {
+			switch typ.Kind {
 			case WEEKDAY:
 				err = checkKind(arrayExpr.Kind, WEEKDAY)
 				arrayExpr.Kind = WEEKDAY

@@ -61,7 +61,7 @@ func (u Unit) String() (s string) {
 	case Kilometer:
 		s = "Km"
 	case Meter:
-		s = "m"
+		s = "M"
 	case Bar:
 		s = "Bar"
 	case Psi:
@@ -84,7 +84,7 @@ func isTimeUnit(s string) (ok bool) {
 
 func isDistanceUnit(s string) (ok bool) {
 	switch s {
-	case "rm", "rkm", "rM", "rKM", "Rm", "Rkm", "Km", "km", "m", "M":
+	case "rm", "rkm", "rM", "rKM", "Rm", "Rkm", "Km", "km", "M":
 		ok = true
 	}
 	return

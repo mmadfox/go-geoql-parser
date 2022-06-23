@@ -88,7 +88,7 @@ RESET after 1h0m0s
 | Float                | -2.300, 5.5, 3000.00                                                                            |
 | String               | "some string"                                                                                   |
 | Duration             | 1h, 20s, 7h3m45s, 7h3m, 3m                                                                      |
-| Distance             | 100m, 5Km                                                                                       |
+| Distance             | 100M, 5Km                                                                                       |
 | Temperature          | 19C, 30F                                                                                        |
 | Pressure             | 2.2Bar, 4Psi                                                                                    |
 | GeometryPoint        | point[-1.1, 1.1]                                                                                |
@@ -103,7 +103,7 @@ RESET after 1h0m0s
 | Time                 | 11:11:11, 11:11, 9:11AM, 3:04Pm                                                                 |
 | DateTime             | 2030-10-02T11:11:11                                                                             |
 | Percent              | 100%                                                                                            |
-| Calendar weekday     | Sun, Mon, Tue, Wed, The, Sri, Sat                                                               |
+| Calendar weekday     | Sun, Mon, Tue, Wed, Thu, Fri, Sat                                                               |
 | Calendar month       | Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec                                      |
 | Variable             | @somevar                                                                                        |
 | Boolean              | true, false                                                                                     |
@@ -260,12 +260,12 @@ This data type is used to describe the DISTANCE value
 
 Unit of measurement:
  - Kilometers: Km
- - Meters: m
+ - Meters: M 
 
 Example:
 ```text
 tracker_radius > 40Km
-tracker_radius in [1m, 100m, 1000m]
+tracker_radius in [1M, 100M, 1000M]
 tracker_radius in 40Km .. 45Km
 ```
 

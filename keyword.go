@@ -113,6 +113,22 @@ var keywords = map[string]Token{
 	"not nearby":     NOT_NEARBY,
 	"intersects":     INTERSECTS,
 	"not intersects": NOT_INTERSECTS,
+
+	"TINT":      INT,
+	"TFLOAT":    FLOAT,
+	"TSTRING":   STRING,
+	"TDATETIME": DATETIME,
+	"TDATE":     DATE,
+	"TTIME":     TIME,
+	"TDURATION": DURATION,
+	"TSPEED":    SPEED,
+	"TPRESSURE": PRESSURE,
+	"TDISTANCE": DISTANCE,
+	"TPERCENT":  PERCENT,
+	"TVAR":      IDENT,
+	"TRANGE":    RANGE,
+	"TWEEKDAY":  WEEKDAY,
+	"TMONTH":    MONTH,
 }
 
 var keywordStrings = map[Token]string{}

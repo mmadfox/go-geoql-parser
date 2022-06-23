@@ -41,9 +41,9 @@ func Walk(v Visitor, expr Expr) {
 	v.Visit(nil)
 }
 
-type visiter func(expr Expr) bool
+type visitor func(expr Expr) bool
 
-func (f visiter) Visit(expr Expr) Visitor {
+func (f visitor) Visit(expr Expr) Visitor {
 	if f(expr) {
 		return f
 	}
@@ -51,5 +51,5 @@ func (f visiter) Visit(expr Expr) Visitor {
 }
 
 func Visit(expr Expr, f func(Expr) bool) {
-	Walk(visiter(f), expr)
+	Walk(visitor(f), expr)
 }
