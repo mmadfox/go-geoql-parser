@@ -12,6 +12,111 @@ type parserTestCase1 struct {
 	assert func(t *TriggerStmt) (err error)
 }
 
+func TestParseVars(t *testing.T) {
+	testCases := []parserTestCase1{
+		{
+			name: "assign geometry",
+			s: `trigger 
+					set
+						a = point[-1.1, 1.1];
+						b = multipoint[point[-1.1, 1.1], point[-1.1, 1.1]];
+						c = line[[1.1, 1.1], [2.1, 3.1], [3.1, 5.5], [5.5, 5.5]];
+						d = polygon[[[1.1,1.1], [1.1,1.1], [1.1,1.1]], [[1.1,1.1], [1.1,1.1], [1.1,1.1]]];
+						x = point[-1.1, 1.1]:12km;
+						u = multiline[
+								line[[1.1,1.1], [1.1,1.1], [1.1,1.1]], 
+								line[[1.1,1.1], [1.1,1.1], [1.1,1.1]]
+						];
+						o = multipolygon[
+								polygon[[[1.1,1.1], [1.1,1.1], [1.1,1.1]], [[1.1,1.1], [1.1,1.1], [1.1,1.1]]], 
+								polygon[[[1.1,1.1], [1.1,1.1], [1.1,1.1]], [[1.1,1.1], [1.1,1.1], [1.1,1.1]]]
+						];
+						m = collection[
+					        point[-1.1, 1.1],
+							multipoint[point[-1.1, 1.1], point[-1.1, 1.1]],
+							line[[1.1, 1.1], [2.1, 3.1], [3.1, 5.5], [5.5, 5.5]],
+							polygon[[[1.1,1.1], [1.1,1.1], [1.1,1.1]], [[1.1,1.1], [1.1,1.1], [1.1,1.1]]],
+							multiline[
+								line[[1.1,1.1], [1.1,1.1], [1.1,1.1]], 
+								line[[1.1,1.1], [1.1,1.1], [1.1,1.1]]
+						    ],
+							multipolygon[
+								polygon[[[1.1,1.1], [1.1,1.1], [1.1,1.1]], [[1.1,1.1], [1.1,1.1], [1.1,1.1]]], 
+								polygon[[[1.1,1.1], [1.1,1.1], [1.1,1.1]], [[1.1,1.1], [1.1,1.1], [1.1,1.1]]]
+							]
+						];
+					when 
+						@a intersects tracker_coords 
+						and @b intersects tracker_coords 
+						and @d intersects tracker_coords 
+						and @u intersects tracker_coords 
+						and @m intersects tracker_coords 
+						and @o intersects tracker_coords 
+						and @x intersects tracker_coords 
+						and @c intersects tracker_coords`,
+			assert: assertVars(),
+		},
+		{
+			name:   "assign int",
+			s:      `trigger set a=1; b=2; c=100; when @a > 100 and @b < 10 or @c == 300`,
+			assert: assertVars(),
+		},
+		{
+			name:   "assign float",
+			s:      `trigger set a=1.1; b=2.1; c=-100.9; when @a > 100 and @b < 10 or @c == 300`,
+			assert: assertVars(),
+		},
+		{
+			name:   "assign string",
+			s:      `trigger set a= "some text"; b="a"; when @a in "yes" and @b == "no"`,
+			assert: assertVars(),
+		},
+		{
+			name: "assign duplicate",
+			s:    `trigger set a="some text"; a="a"; when @a in "yes" and @b == "no"`,
+			err:  true,
+		},
+		{
+			name: "assign variable",
+			s:    `trigger set a=@a;  when *`,
+			err:  true,
+		},
+		{
+			name: "assign variable",
+			s:    `trigger set a=[@a, @b];  when *`,
+			err:  true,
+		},
+		{
+			name: "assign variable",
+			s:    `trigger set a:1;  when *`,
+			err:  true,
+		},
+		{
+			name: "assign variable",
+			s:    `trigger set a=1`,
+			err:  true,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			stmt, err := Parse(tc.s)
+			if tc.err {
+				if err == nil {
+					t.Fatalf("got nil, expected error")
+				} else {
+					return
+				}
+			} else if !tc.err && err != nil {
+				t.Fatal(err)
+			}
+			trigger := stmt.(*TriggerStmt)
+			if err := tc.assert(trigger); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
 func TestParseArray(t *testing.T) {
 	testCases := []parserTestCase1{
 		{
@@ -424,6 +529,31 @@ reset after 1h
 		}
 		trigger := stmt.(*TriggerStmt)
 		_ = trigger
+	}
+}
+
+func assertVars() func(t *TriggerStmt) (err error) {
+	return func(t *TriggerStmt) (err error) {
+		vars := make(map[string]struct{})
+		Visit(t, func(expr Expr) bool {
+			varlit, ok := expr.(*VarLit)
+			if !ok {
+				return true
+			}
+			vars[varlit.ID] = struct{}{}
+			return true
+		})
+		if len(vars) == 0 {
+			err = fmt.Errorf("no variables found")
+		}
+		for id := range vars {
+			_, ok := t.Set[id]
+			if !ok {
+				err = fmt.Errorf("var %s not assigned", id)
+				return
+			}
+		}
+		return
 	}
 }
 

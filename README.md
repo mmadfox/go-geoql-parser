@@ -6,9 +6,9 @@ Package declares the types used to represent syntax trees for GeoQL rules.
 TRIGGER
 SET
 	someplace = multipoint[
-		point[1.1, 1.1]:400m, 
+		point[1.1, 1.1]:400M, 
 		point[-2.1, 2.1]:5Km
-	]
+	];
 WHEN
 	tracker_point3%2 == 0 
 	and tracker_cords intersects @someplace 
@@ -79,36 +79,36 @@ RESET after 1h0m0s
 | REM            | 5          | %              |
 
 # Data Types
-| Data type            | Example                                                                                         |
-|----------------------|-------------------------------------------------------------------------------------------------|
-| Selector             | tracker_speed, coord, some_selector                                                             |
-| Wildcard             | *                                                                                               |
-| Speed                | 20Kph, 45Mph                                                                                    |
-| Integer              | 100, 1, -1, 0, 5000                                                                             |
-| Float                | -2.300, 5.5, 3000.00                                                                            |
-| String               | "some string"                                                                                   |
-| Duration             | 1h, 20s, 7h3m45s, 7h3m, 3m                                                                      |
-| Distance             | 100M, 5Km                                                                                       |
-| Temperature          | 19C, 30F                                                                                        |
-| Pressure             | 2.2Bar, 4Psi                                                                                    |
-| GeometryPoint        | point[-1.1, 1.1]                                                                                |
-| GeometryMultiPoint   | multipoint[point[-1.1, 1.1], point[-1.1, 1.1]]                                                  |
-| GeometryLine         | line[[1.1, 1.1], [2.1, 3.1], [3.1, 5.5], [5.5, 5.5]]                                            |
-| GeometryMultiLine    | multiline[line[[1.1, 1.1], [2.1, 3.1]], [[1.1, 1.1], [2.1, 3.1]], line[[1.1, 1.1], [2.1, 3.1]]] |
-| GeometryPolygon      | polygon[[[1.1,1.1], [1.1,1.1], [1.1,1.1]], [[1.1,1.1], [1.1,1.1], [1.1,1.1]]]                   |
-| GeometryMultiPolygon | multipolygon[polygon[...], polygon[...]]                                                        |
-| GeometryCircle       | point[-1.1, 1.1]:12km, point[-1.1, 1.1]:500m                                                    |
-| GeometryCollection   | collection[point[...], line[...], polygon[...], ...]                                            |
-| Date                 | 2030-10-02                                                                                      |
-| Time                 | 11:11:11, 11:11, 9:11AM, 3:04Pm                                                                 |
-| DateTime             | 2030-10-02T11:11:11                                                                             |
-| Percent              | 100%                                                                                            |
-| Calendar weekday     | Sun, Mon, Tue, Wed, Thu, Fri, Sat                                                               |
-| Calendar month       | Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec                                      |
-| Variable             | @somevar                                                                                        |
-| Boolean              | true, false                                                                                     |
-| Array                | [1, 2, 3]                                                                                       |
-| Range                | 1 .. 1                                                                                          |
+| Data type            | Example                                                                                  |
+|----------------------|------------------------------------------------------------------------------------------|
+| Selector             | tracker_speed, coord, some_selector                                                      |
+| Wildcard             | *                                                                                        |
+| Speed                | 20Kph, 45Mph                                                                             |
+| Integer              | 100, 1, -1, 0, 5000                                                                      |
+| Float                | -2.300, 5.5, 3000.00                                                                     |
+| String               | "some string"                                                                            |
+| Duration             | 1h, 20s, 7h3m45s, 7h3m, 3m                                                               |
+| Distance             | 100M, 5Km                                                                                |
+| Temperature          | 19C, 30F                                                                                 |
+| Pressure             | 2.2Bar, 4Psi                                                                             |
+| GeometryPoint        | point[-1.1, 1.1]                                                                         |
+| GeometryMultiPoint   | multipoint[point[-1.1, 1.1], point[-1.1, 1.1]]                                           |
+| GeometryLine         | line[[1.1, 1.1], [2.1, 3.1], [3.1, 5.5], [5.5, 5.5]]                                     |
+| GeometryMultiLine    | multiline[line[[1.1,1.1], [1.1,1.1], [1.1,1.1]], line[[1.1,1.1], [1.1,1.1], [1.1,1.1]]]  |
+| GeometryPolygon      | polygon[[[1.1,1.1], [1.1,1.1], [1.1,1.1]], [[1.1,1.1], [1.1,1.1], [1.1,1.1]]]            |
+| GeometryMultiPolygon | multipolygon[polygon[...], polygon[...]]                                                 |
+| GeometryCircle       | point[-1.1, 1.1]:12km, point[-1.1, 1.1]:500M                                             |
+| GeometryCollection   | collection[point[...], line[...], polygon[...], ...]                                     |
+| Date                 | 2030-10-02                                                                               |
+| Time                 | 11:11:11, 11:11, 9:11AM, 3:04Pm                                                          |
+| DateTime             | 2030-10-02T11:11:11                                                                      |
+| Percent              | 100%                                                                                     |
+| Calendar weekday     | Sun, Mon, Tue, Wed, Thu, Fri, Sat                                                        |
+| Calendar month       | Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec                               |
+| Variable             | @somevar                                                                                 |
+| Boolean              | true, false                                                                              |
+| Array                | [1, 2, 3]                                                                                |
+| Range                | 1 .. 1                                                                                   |
 
 
 ## Selector

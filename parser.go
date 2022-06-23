@@ -151,11 +151,11 @@ func (s *parser) parseSet(stmt *TriggerStmt) error {
 	var varname string
 	s.next()
 	for {
-		if s.except(EOF) {
-			break
-		}
 		if s.except(WHEN) {
 			s.t.Reset()
+			break
+		}
+		if s.except(EOF) {
 			break
 		}
 		varname = s.t.TokenText()
@@ -167,6 +167,9 @@ func (s *parser) parseSet(stmt *TriggerStmt) error {
 		expr, err := s.parseUnaryExpr()
 		if err != nil {
 			return err
+		}
+		if s.lit == ";" {
+			s.next()
 		}
 		switch typ := expr.(type) {
 		case *VarLit:
