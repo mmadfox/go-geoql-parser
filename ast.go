@@ -12,6 +12,9 @@ type Statement interface {
 }
 
 type Expr interface {
+	Pos() Pos
+	End() Pos
+
 	format(b *bytes.Buffer, padding string, inline bool)
 	isExpr()
 }
@@ -25,7 +28,8 @@ type TriggerStmt struct {
 	RepeatCount    Expr
 	RepeatInterval Expr
 	ResetAfter     Expr
-	Pos            Pos
+	lpos           Pos
+	rpos           Pos
 }
 
 func (t *TriggerStmt) String() string {
@@ -35,6 +39,10 @@ func (t *TriggerStmt) String() string {
 	buf := bytes.NewBuffer(nil)
 	formatTriggerStmt(t, buf)
 	return buf.String()
+}
+
+func (t *TriggerStmt) format(b *bytes.Buffer, _ string, _ bool) {
+	formatTriggerStmt(t, b)
 }
 
 func formatTriggerStmt(t *TriggerStmt, b *bytes.Buffer) {
@@ -105,10 +113,10 @@ func (t *TriggerStmt) initVars() {
 }
 
 type ArrayExpr struct {
-	Kind     Token
-	List     []Expr
-	StartPos Pos
-	EndPos   Pos
+	Kind Token
+	List []Expr
+	lpos Pos
+	rpos Pos
 }
 
 func (e *ArrayExpr) format(b *bytes.Buffer, padding string, inline bool) {
@@ -127,7 +135,7 @@ type BinaryExpr struct {
 	Op    Token
 	Left  Expr
 	Right Expr
-	Pos   Pos
+	OpPos Pos
 }
 
 func (e *BinaryExpr) format(b *bytes.Buffer, padding string, inline bool) {
@@ -156,9 +164,9 @@ func (e *BinaryExpr) format(b *bytes.Buffer, padding string, inline bool) {
 }
 
 type ParenExpr struct {
-	Expr     Expr
-	StartPos Pos
-	EndPos   Pos
+	Expr Expr
+	lpos Pos
+	rpos Pos
 }
 
 func (e *ParenExpr) format(b *bytes.Buffer, padding string, inline bool) {
@@ -186,7 +194,7 @@ func (e *ParenExpr) format(b *bytes.Buffer, padding string, inline bool) {
 }
 
 type WildcardLit struct {
-	Pos Pos
+	lpos Pos
 }
 
 func (e *WildcardLit) format(b *bytes.Buffer, _ string, _ bool) {
@@ -195,8 +203,9 @@ func (e *WildcardLit) format(b *bytes.Buffer, _ string, _ bool) {
 
 type CalendarLit struct {
 	Kind Token
-	Pos  Pos
 	Val  int
+	lpos Pos
+	rpos Pos
 }
 
 var shortDayNames = []string{
@@ -234,10 +243,10 @@ func (e *CalendarLit) format(b *bytes.Buffer, _ string, _ bool) {
 }
 
 type GeometryPointExpr struct {
-	Val      [2]float64
-	Radius   *DistanceLit
-	StartPos Pos
-	EndPos   Pos
+	Val    [2]float64
+	Radius *DistanceLit
+	lpos   Pos
+	rpos   Pos
 }
 
 func (e *GeometryPointExpr) format(b *bytes.Buffer, padding string, inline bool) {
@@ -255,10 +264,10 @@ func (e *GeometryPointExpr) format(b *bytes.Buffer, padding string, inline bool)
 }
 
 type GeometryMultiObject struct {
-	Kind     Token
-	Val      []Expr
-	StartPos Pos
-	EndPos   Pos
+	Kind Token
+	Val  []Expr
+	lpos Pos
+	rpos Pos
 }
 
 func (e *GeometryMultiObject) format(b *bytes.Buffer, padding string, inline bool) {
@@ -295,10 +304,10 @@ func (e *GeometryMultiObject) format(b *bytes.Buffer, padding string, inline boo
 }
 
 type GeometryLineExpr struct {
-	Val      [][2]float64
-	Margin   *DistanceLit
-	StartPos Pos
-	EndPos   Pos
+	Val    [][2]float64
+	Margin *DistanceLit
+	lpos   Pos
+	rpos   Pos
 }
 
 func (e *GeometryLineExpr) format(b *bytes.Buffer, padding string, inline bool) {
@@ -336,9 +345,9 @@ func (e *GeometryLineExpr) format(b *bytes.Buffer, padding string, inline bool) 
 }
 
 type GeometryPolygonExpr struct {
-	Val      [][][2]float64
-	StartPos Pos
-	EndPos   Pos
+	Val  [][][2]float64
+	lpos Pos
+	rpos Pos
 }
 
 func (e *GeometryPolygonExpr) HasHoles() bool {
@@ -391,9 +400,9 @@ func (e *GeometryPolygonExpr) format(b *bytes.Buffer, padding string, inline boo
 }
 
 type GeometryCollectionExpr struct {
-	Objects  []Expr
-	StartPos Pos
-	EndPos   Pos
+	Objects []Expr
+	lpos    Pos
+	rpos    Pos
 }
 
 func (e *GeometryCollectionExpr) format(b *bytes.Buffer, padding string, inline bool) {
@@ -423,8 +432,9 @@ func (e *GeometryCollectionExpr) format(b *bytes.Buffer, padding string, inline 
 }
 
 type IntLit struct {
-	Val int
-	Pos Pos
+	Val  int
+	lpos Pos
+	rpos Pos
 }
 
 func (e *IntLit) format(b *bytes.Buffer, _ string, _ bool) {
@@ -432,10 +442,10 @@ func (e *IntLit) format(b *bytes.Buffer, _ string, _ bool) {
 }
 
 type RangeExpr struct {
-	Low      Expr
-	High     Expr
-	StartPos Pos
-	EndPos   Pos
+	Low  Expr
+	High Expr
+	lpos Pos
+	rpos Pos
 }
 
 func (e *RangeExpr) format(b *bytes.Buffer, padding string, inline bool) {
@@ -448,8 +458,9 @@ func (e *RangeExpr) format(b *bytes.Buffer, padding string, inline bool) {
 }
 
 type PercentLit struct {
-	Val float64
-	Pos Pos
+	Val  float64
+	lpos Pos
+	rpos Pos
 }
 
 func (e *PercentLit) format(b *bytes.Buffer, _ string, _ bool) {
@@ -458,8 +469,9 @@ func (e *PercentLit) format(b *bytes.Buffer, _ string, _ bool) {
 }
 
 type StringLit struct {
-	Val string
-	Pos Pos
+	Val  string
+	lpos Pos
+	rpos Pos
 }
 
 func (e *StringLit) format(b *bytes.Buffer, _ string, _ bool) {
@@ -469,8 +481,9 @@ func (e *StringLit) format(b *bytes.Buffer, _ string, _ bool) {
 }
 
 type FloatLit struct {
-	Val float64
-	Pos Pos
+	Val  float64
+	lpos Pos
+	rpos Pos
 }
 
 func (e *FloatLit) format(b *bytes.Buffer, _ string, _ bool) {
@@ -478,8 +491,9 @@ func (e *FloatLit) format(b *bytes.Buffer, _ string, _ bool) {
 }
 
 type DurationLit struct {
-	Val time.Duration
-	Pos Pos
+	Val  time.Duration
+	lpos Pos
+	rpos Pos
 }
 
 func (e *DurationLit) format(b *bytes.Buffer, _ string, _ bool) {
@@ -487,10 +501,11 @@ func (e *DurationLit) format(b *bytes.Buffer, _ string, _ bool) {
 }
 
 type TemperatureLit struct {
-	Val float64
-	U   Unit
-	Vec Vector
-	Pos Pos
+	Val  float64
+	U    Unit
+	Vec  Vector
+	lpos Pos
+	rpos Pos
 }
 
 func (e *TemperatureLit) format(b *bytes.Buffer, _ string, _ bool) {
@@ -502,9 +517,10 @@ func (e *TemperatureLit) format(b *bytes.Buffer, _ string, _ bool) {
 }
 
 type PressureLit struct {
-	Val float64
-	U   Unit
-	Pos Pos
+	Val  float64
+	U    Unit
+	lpos Pos
+	rpos Pos
 }
 
 func (e *PressureLit) format(b *bytes.Buffer, _ string, _ bool) {
@@ -513,9 +529,10 @@ func (e *PressureLit) format(b *bytes.Buffer, _ string, _ bool) {
 }
 
 type DistanceLit struct {
-	Val float64
-	U   Unit
-	Pos Pos
+	Val  float64
+	U    Unit
+	lpos Pos
+	rpos Pos
 }
 
 func (e *DistanceLit) format(b *bytes.Buffer, _ string, _ bool) {
@@ -524,9 +541,10 @@ func (e *DistanceLit) format(b *bytes.Buffer, _ string, _ bool) {
 }
 
 type SpeedLit struct {
-	Val float64
-	U   Unit
-	Pos Pos
+	Val  float64
+	U    Unit
+	lpos Pos
+	rpos Pos
 }
 
 func (e *SpeedLit) format(b *bytes.Buffer, _ string, _ bool) {
@@ -537,7 +555,8 @@ func (e *SpeedLit) format(b *bytes.Buffer, _ string, _ bool) {
 type DateLit struct {
 	Year, Day int
 	Month     time.Month
-	Pos       Pos
+	lpos      Pos
+	rpos      Pos
 }
 
 func dt2str(v int) string {
@@ -558,8 +577,9 @@ func (e *DateLit) format(b *bytes.Buffer, _ string, _ bool) {
 
 type TimeLit struct {
 	Hour, Minute, Seconds int
-	Pos                   Pos
 	U                     Unit
+	lpos                  Pos
+	rpos                  Pos
 }
 
 func (e *TimeLit) format(b *bytes.Buffer, _ string, _ bool) {
@@ -585,8 +605,9 @@ func (e *TimeLit) format(b *bytes.Buffer, _ string, _ bool) {
 }
 
 type VarLit struct {
-	ID  string
-	Pos Pos
+	ID   string
+	lpos Pos
+	rpos Pos
 }
 
 func (e *VarLit) format(b *bytes.Buffer, _ string, _ bool) {
@@ -597,8 +618,9 @@ func (e *VarLit) format(b *bytes.Buffer, _ string, _ bool) {
 type DateTimeLit struct {
 	Year, Day, Hours, Minutes, Seconds int
 	Month                              time.Month
-	Pos                                Pos
 	U                                  Unit
+	lpos                               Pos
+	rpos                               Pos
 }
 
 func (e *DateTimeLit) format(b *bytes.Buffer, _ string, _ bool) {
@@ -622,8 +644,19 @@ type SelectorExpr struct {
 	Args     map[string]struct{} // device ids
 	Wildcard bool                // indicates the current device
 	Props    []Expr              // some props
-	StartPos Pos
-	EndPos   Pos
+	lpos     Pos
+	rpos     Pos
+}
+
+func (e *SelectorExpr) calculateEnd(p Pos) {
+	if len(e.Props) > 0 {
+		e.rpos = e.Props[len(e.Props)-1].End() + 1
+	} else {
+		if p > 0 {
+			p -= 1
+		}
+		e.rpos = p
+	}
 }
 
 func (e *SelectorExpr) needExpand() (ok bool) {
@@ -695,8 +728,9 @@ func (e *SelectorExpr) format(b *bytes.Buffer, padding string, inline bool) {
 }
 
 type BooleanLit struct {
-	Val bool
-	Pos Pos
+	Val  bool
+	lpos Pos
+	rpos Pos
 }
 
 func (e *BooleanLit) format(b *bytes.Buffer, _ string, _ bool) {
@@ -744,3 +778,59 @@ func (e *PercentLit) isExpr()             {}
 func (e *VarLit) isExpr()                 {}
 func (e *RangeExpr) isExpr()              {}
 func (e *CalendarLit) isExpr()            {}
+func (t *TriggerStmt) isExpr()            {}
+
+func (e *BinaryExpr) Pos() Pos             { return e.Left.Pos() }
+func (e *BinaryExpr) End() Pos             { return e.Right.Pos() }
+func (e *ParenExpr) Pos() Pos              { return e.lpos }
+func (e *ParenExpr) End() Pos              { return e.Expr.End() }
+func (e *SelectorExpr) Pos() Pos           { return e.lpos }
+func (e *SelectorExpr) End() Pos           { return e.rpos }
+func (e *WildcardLit) Pos() Pos            { return e.lpos }
+func (e *WildcardLit) End() Pos            { return e.lpos + 1 }
+func (e *BooleanLit) Pos() Pos             { return e.lpos }
+func (e *BooleanLit) End() Pos             { return e.rpos }
+func (e *SpeedLit) Pos() Pos               { return e.lpos }
+func (e *SpeedLit) End() Pos               { return e.rpos }
+func (e *IntLit) Pos() Pos                 { return e.lpos }
+func (e *IntLit) End() Pos                 { return e.rpos }
+func (e *FloatLit) Pos() Pos               { return e.lpos }
+func (e *FloatLit) End() Pos               { return e.rpos }
+func (e *DurationLit) Pos() Pos            { return e.lpos }
+func (e *DurationLit) End() Pos            { return e.rpos }
+func (e *DistanceLit) Pos() Pos            { return e.lpos }
+func (e *DistanceLit) End() Pos            { return e.rpos }
+func (e *TemperatureLit) Pos() Pos         { return e.lpos }
+func (e *TemperatureLit) End() Pos         { return e.rpos }
+func (e *PressureLit) Pos() Pos            { return e.lpos }
+func (e *PressureLit) End() Pos            { return e.rpos }
+func (e *GeometryPointExpr) Pos() Pos      { return e.lpos }
+func (e *GeometryPointExpr) End() Pos      { return e.rpos }
+func (e *GeometryLineExpr) Pos() Pos       { return e.lpos }
+func (e *GeometryLineExpr) End() Pos       { return e.rpos }
+func (e *GeometryPolygonExpr) Pos() Pos    { return e.lpos }
+func (e *GeometryPolygonExpr) End() Pos    { return e.rpos }
+func (e *GeometryMultiObject) Pos() Pos    { return e.lpos }
+func (e *GeometryMultiObject) End() Pos    { return e.rpos }
+func (e *GeometryCollectionExpr) Pos() Pos { return e.lpos }
+func (e *GeometryCollectionExpr) End() Pos { return e.rpos }
+func (e *DateLit) Pos() Pos                { return e.lpos }
+func (e *DateLit) End() Pos                { return e.rpos }
+func (e *TimeLit) Pos() Pos                { return e.lpos }
+func (e *TimeLit) End() Pos                { return e.rpos }
+func (e *DateTimeLit) Pos() Pos            { return e.lpos }
+func (e *DateTimeLit) End() Pos            { return e.rpos }
+func (e *ArrayExpr) Pos() Pos              { return e.lpos }
+func (e *ArrayExpr) End() Pos              { return e.rpos }
+func (e *StringLit) Pos() Pos              { return e.lpos }
+func (e *StringLit) End() Pos              { return e.rpos }
+func (e *PercentLit) Pos() Pos             { return e.lpos }
+func (e *PercentLit) End() Pos             { return e.rpos }
+func (e *VarLit) Pos() Pos                 { return e.lpos }
+func (e *VarLit) End() Pos                 { return e.rpos }
+func (e *RangeExpr) Pos() Pos              { return e.lpos }
+func (e *RangeExpr) End() Pos              { return e.rpos }
+func (e *CalendarLit) Pos() Pos            { return e.lpos }
+func (e *CalendarLit) End() Pos            { return e.rpos }
+func (t *TriggerStmt) Pos() Pos            { return t.lpos }
+func (t *TriggerStmt) End() Pos            { return t.rpos }

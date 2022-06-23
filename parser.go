@@ -17,18 +17,18 @@ func Parse(gql string) (Statement, error) {
 }
 
 type parser struct {
-	r   *strings.Reader
-	t   *Tokenizer
-	pos Pos
-	tok Token
-	lit string
-	err error
-	neg bool
+	r    *strings.Reader
+	t    *Tokenizer
+	tok  Token
+	lit  string
+	err  error
+	neg  bool
+	lpos Pos
+	rpos Pos
 }
 
 func (s *parser) next() {
 	s.tok, s.lit = s.t.Scan()
-	s.pos = s.t.Offset()
 }
 
 func (s *parser) parse0() (stmt Statement, err error) {
@@ -74,7 +74,7 @@ func (s *parser) parseTriggerStmt() (stmt *TriggerStmt, err error) {
 			return nil, err
 		}
 	}
-	stmt.Pos = s.t.Offset()
+	stmt.lpos = s.t.Offset()
 	return stmt, nil
 }
 
@@ -220,7 +220,7 @@ func (s *parser) parseBinaryExpr(oprec0 int) (Expr, error) {
 		if err != nil {
 			return nil, err
 		}
-		left = &BinaryExpr{Left: left, Right: right, Op: op, Pos: pos}
+		left = &BinaryExpr{Left: left, Right: right, Op: op, OpPos: pos}
 	}
 }
 
@@ -240,6 +240,9 @@ func (s *parser) parseUnaryExpr() (expr Expr, err error) {
 	}
 
 	switch s.tok {
+	default:
+		s.err = fmt.Errorf("illegal expression")
+		err = s.error()
 	case SELECTOR:
 		expr, err = s.parseSelectorExpr()
 	case MUL:
@@ -268,9 +271,11 @@ func (s *parser) parseUnaryExpr() (expr Expr, err error) {
 		expr, err = s.parseCalendarLit()
 	}
 
-	switch s.tok {
-	case RANGE:
-		expr, err = s.parseRangeExpr(expr)
+	if err != nil {
+		switch s.tok {
+		case RANGE:
+			expr, err = s.parseRangeExpr(expr)
+		}
 	}
 
 	s.neg = false
@@ -279,7 +284,7 @@ func (s *parser) parseUnaryExpr() (expr Expr, err error) {
 
 func (s *parser) parseVarExpr() (expr Expr, err error) {
 	s.next()
-	expr = &VarLit{ID: s.t.TokenText(), Pos: s.t.Offset()}
+	expr = &VarLit{ID: s.t.TokenText(), lpos: s.t.Offset()}
 	s.next()
 	return
 }
@@ -332,7 +337,7 @@ func (s *parser) parseCalendarLit() (expr Expr, err error) {
 			val = 12
 		}
 	}
-	expr = &CalendarLit{Val: val, Pos: s.t.Offset(), Kind: s.tok}
+	expr = &CalendarLit{Val: val, lpos: s.t.Offset(), Kind: s.tok}
 	s.next()
 	return
 }
@@ -348,15 +353,15 @@ func (s *parser) parseRangeExpr(low Expr) (expr Expr, err error) {
 		return
 	}
 	return &RangeExpr{
-		Low:      low,
-		High:     high,
-		StartPos: startPos,
-		EndPos:   s.t.Offset(),
+		Low:  low,
+		High: high,
+		lpos: startPos,
+		rpos: s.t.Offset(),
 	}, nil
 }
 
 func (s *parser) parseWildcardLit() (expr Expr, err error) {
-	return &WildcardLit{Pos: s.t.Offset()}, nil
+	return &WildcardLit{lpos: s.t.Offset()}, nil
 }
 
 func (s *parser) parseBooleanLit() (expr Expr, err error) {
@@ -364,9 +369,9 @@ func (s *parser) parseBooleanLit() (expr Expr, err error) {
 	default:
 		return nil, s.error()
 	case "true", "up":
-		expr = &BooleanLit{Val: true, Pos: s.t.Offset()}
+		expr = &BooleanLit{Val: true, lpos: s.t.Offset()}
 	case "false", "down":
-		expr = &BooleanLit{Val: false, Pos: s.t.Offset()}
+		expr = &BooleanLit{Val: false, lpos: s.t.Offset()}
 	}
 	s.next()
 	return
@@ -397,7 +402,7 @@ func (s *parser) parseArrayExpr() (expr Expr, err error) {
 		}
 
 		if arrayExpr == nil {
-			arrayExpr = &ArrayExpr{StartPos: startPos, List: make([]Expr, 0), Kind: ILLEGAL}
+			arrayExpr = &ArrayExpr{lpos: startPos, List: make([]Expr, 0), Kind: ILLEGAL}
 		}
 
 		switch expr.(type) {
@@ -445,6 +450,15 @@ func (s *parser) parseArrayExpr() (expr Expr, err error) {
 		case *RangeExpr:
 			err = checkKind(arrayExpr.Kind, RANGE)
 			arrayExpr.Kind = RANGE
+		case *CalendarLit:
+			switch s.tok {
+			case WEEKDAY:
+				err = checkKind(arrayExpr.Kind, WEEKDAY)
+				arrayExpr.Kind = WEEKDAY
+			case MONTH:
+				err = checkKind(arrayExpr.Kind, MONTH)
+				arrayExpr.Kind = MONTH
+			}
 		}
 		if err != nil {
 			return nil, err
@@ -456,7 +470,7 @@ func (s *parser) parseArrayExpr() (expr Expr, err error) {
 			break
 		}
 	}
-	arrayExpr.EndPos = s.t.Offset()
+	arrayExpr.rpos = s.t.Offset()
 	s.next()
 	return arrayExpr, nil
 }
@@ -469,9 +483,9 @@ func (s *parser) parseGeometryMultiObject() (expr Expr, err error) {
 	}
 	s.next()
 	multiobj := &GeometryMultiObject{
-		Kind:     geotyp,
-		Val:      make([]Expr, 0),
-		StartPos: s.t.Offset(),
+		Kind: geotyp,
+		Val:  make([]Expr, 0),
+		lpos: s.t.Offset(),
 	}
 	for {
 		if !isGeometryToken(s.tok) {
@@ -508,7 +522,7 @@ func (s *parser) parseGeometryMultiObject() (expr Expr, err error) {
 			s.next()
 		}
 	}
-	multiobj.EndPos = s.t.Offset()
+	multiobj.rpos = s.t.Offset()
 	if len(multiobj.Val) == 0 {
 		return nil, s.error()
 	}
@@ -517,8 +531,8 @@ func (s *parser) parseGeometryMultiObject() (expr Expr, err error) {
 
 func (s *parser) parseGeometryCollectionExpr() (expr Expr, err error) {
 	collection := &GeometryCollectionExpr{
-		Objects:  make([]Expr, 0),
-		StartPos: s.t.Offset(),
+		Objects: make([]Expr, 0),
+		lpos:    s.t.Offset(),
 	}
 	s.next()
 	if !s.except(LBRACK) {
@@ -549,7 +563,7 @@ func (s *parser) parseGeometryCollectionExpr() (expr Expr, err error) {
 			s.next()
 		}
 	}
-	collection.EndPos = s.t.Offset()
+	collection.rpos = s.t.Offset()
 	if len(collection.Objects) == 0 {
 		return nil, s.error()
 	}
@@ -670,7 +684,7 @@ func (s *parser) parseGeometryExpr() (expr Expr, err error) {
 	}
 	switch geomtyp {
 	case GEOMETRY_POINT:
-		point := &GeometryPointExpr{Val: aa, StartPos: sp, EndPos: s.t.Offset()}
+		point := &GeometryPointExpr{Val: aa, lpos: sp, rpos: s.t.Offset()}
 		if !s.except(COLON) {
 			return point, nil
 		}
@@ -680,10 +694,10 @@ func (s *parser) parseGeometryExpr() (expr Expr, err error) {
 			return nil, err
 		}
 		point.Radius = radius
-		point.EndPos = s.t.Offset()
+		point.rpos = s.t.Offset()
 		return point, nil
 	case GEOMETRY_LINE:
-		line := &GeometryLineExpr{Val: bb, StartPos: sp, EndPos: s.t.Offset()}
+		line := &GeometryLineExpr{Val: bb, lpos: sp, rpos: s.t.Offset()}
 		if !s.except(COLON) {
 			return line, nil
 		}
@@ -693,10 +707,10 @@ func (s *parser) parseGeometryExpr() (expr Expr, err error) {
 			return nil, err
 		}
 		line.Margin = margin
-		line.EndPos = s.t.Offset()
+		line.rpos = s.t.Offset()
 		return line, nil
 	case GEOMETRY_POLYGON:
-		return &GeometryPolygonExpr{Val: cc, StartPos: sp, EndPos: s.t.Offset()}, nil
+		return &GeometryPolygonExpr{Val: cc, lpos: sp, rpos: s.t.Offset()}, nil
 	}
 	err = s.error()
 	return
@@ -736,16 +750,17 @@ func (s *parser) parseParenExpr() (expr Expr, err error) {
 	}
 	rp := s.t.Offset()
 	s.next()
-	return &ParenExpr{Expr: expr, StartPos: lp, EndPos: rp}, nil
+	return &ParenExpr{Expr: expr, lpos: lp, rpos: rp}, nil
 }
 
 func (s *parser) parseStringLit() (expr Expr, err error) {
-	expr = &StringLit{Val: trim(s.t.TokenText()), Pos: s.t.Offset()}
+	expr = &StringLit{Val: trim(s.t.TokenText()), lpos: s.t.Offset()}
 	s.next()
 	return
 }
 
 func (s *parser) parseFloatTypes() (expr Expr, err error) {
+	s.lpos = s.t.Offset()
 	val, err := strconv.ParseFloat(s.lit, 64)
 	if err != nil {
 		return nil, s.error()
@@ -758,12 +773,13 @@ func (s *parser) parseFloatTypes() (expr Expr, err error) {
 		if s.neg {
 			val = -val
 		}
-		expr = &FloatLit{Val: val, Pos: s.t.Offset()}
+		expr = &FloatLit{Val: val, lpos: s.lpos, rpos: s.rpos}
 	}
 	return
 }
 
 func (s *parser) parseIntTypes() (expr Expr, err error) {
+	s.lpos = s.t.Offset()
 	intval, err := strconv.Atoi(s.lit)
 	if err != nil {
 		return nil, s.error()
@@ -776,9 +792,8 @@ func (s *parser) parseIntTypes() (expr Expr, err error) {
 		if s.neg {
 			intval = -intval
 		}
-		expr = &IntLit{Val: intval, Pos: s.t.Offset()}
+		expr = &IntLit{Val: intval, lpos: s.lpos, rpos: s.rpos}
 	}
-
 	return
 }
 
@@ -862,7 +877,7 @@ func (s *parser) parseDateTime(prefix string) (expr Expr, err error) {
 				Hour:    hour,
 				Minute:  min,
 				Seconds: sec,
-				Pos:     s.t.Offset(),
+				lpos:    s.t.Offset(),
 			}
 		}
 	case false:
@@ -874,7 +889,7 @@ func (s *parser) parseDateTime(prefix string) (expr Expr, err error) {
 				Year:  year,
 				Month: month,
 				Day:   day,
-				Pos:   s.t.Offset(),
+				lpos:  s.t.Offset(),
 			}
 		case 6:
 			expr = &DateTimeLit{
@@ -884,7 +899,7 @@ func (s *parser) parseDateTime(prefix string) (expr Expr, err error) {
 				Hours:   hour,
 				Minutes: min,
 				Seconds: sec,
-				Pos:     s.t.Offset(),
+				lpos:    s.t.Offset(),
 			}
 		}
 	}
@@ -904,25 +919,27 @@ func (s *parser) parseDateTime(prefix string) (expr Expr, err error) {
 
 func (s *parser) parseAllTypes(v float64) (expr Expr, err error) {
 	plit := s.lit
+	s.rpos = s.t.Offset()
 	s.next()
 	unit := s.t.TokenText()
 	switch {
 	case isPercentUnit(unit):
-		expr = &PercentLit{Val: v, Pos: s.t.Offset()}
+		s.rpos += 1
+		expr = &PercentLit{Val: v, lpos: s.lpos, rpos: s.rpos}
 		s.next()
 	case isDateTimePrefix(unit):
 		return s.parseDateTime(plit)
 	case isPressureUnit(unit):
 		u := unitFromString(s.lit)
-		expr = &PressureLit{Val: v, U: u, Pos: s.t.Offset()}
+		expr = &PressureLit{Val: v, U: u, lpos: s.lpos, rpos: s.rpos + u.size()}
 		s.next()
 	case isDistanceUnit(unit):
 		u := unitFromString(s.lit)
-		expr = &DistanceLit{Val: v, U: u, Pos: s.t.Offset()}
+		expr = &DistanceLit{Val: v, U: u, lpos: s.lpos, rpos: s.rpos + u.size()}
 		s.next()
 	case isSpeedUnit(unit):
 		u := unitFromString(s.lit)
-		expr = &SpeedLit{Val: v, U: u, Pos: s.t.Offset()}
+		expr = &SpeedLit{Val: v, U: u, lpos: s.lpos, rpos: s.rpos + u.size()}
 		s.next()
 	case isTemperatureUnit(unit):
 		ts := Positive
@@ -930,7 +947,7 @@ func (s *parser) parseAllTypes(v float64) (expr Expr, err error) {
 			ts = Negative
 		}
 		u := unitFromString(s.lit)
-		expr = &TemperatureLit{Val: v, U: u, Vec: ts, Pos: s.t.Offset()}
+		expr = &TemperatureLit{Val: v, U: u, Vec: ts, lpos: s.lpos, rpos: s.rpos + u.size()}
 		s.next()
 	default:
 		var fr rune
@@ -943,7 +960,7 @@ func (s *parser) parseAllTypes(v float64) (expr Expr, err error) {
 			if er != nil {
 				return nil, s.error()
 			}
-			expr = &DurationLit{Val: dur, Pos: s.t.Offset()}
+			expr = &DurationLit{Val: dur, lpos: s.lpos, rpos: s.rpos}
 			s.next()
 		}
 	}
@@ -956,13 +973,13 @@ func (s *parser) parseSelectorProps(selector *SelectorExpr) error {
 		if err != nil {
 			return err
 		}
-		if s.except(EOF) {
-			break
-		}
 		if selector.Props == nil {
 			selector.Props = make([]Expr, 0)
 		}
 		selector.Props = append(selector.Props, prop)
+		if s.except(EOF) {
+			break
+		}
 		if !s.except(COMMA) {
 			break
 		}
@@ -971,24 +988,24 @@ func (s *parser) parseSelectorProps(selector *SelectorExpr) error {
 }
 
 func (s *parser) parseSelectorExpr() (expr Expr, err error) {
-	selExpr := &SelectorExpr{
-		Ident:    s.lit,
-		StartPos: s.t.Offset(),
-	}
+	selector := &SelectorExpr{Ident: s.lit, lpos: s.t.Offset()}
+
 	s.next()
+
 	if !s.except(LBRACE, COLON) {
-		selExpr.Wildcard = true
-		selExpr.EndPos = s.t.Offset()
-		return selExpr, nil
+		selector.Wildcard = true
+		selector.calculateEnd(s.t.Offset())
+		return selector, nil
 	}
 
 	if s.except(COLON) {
-		err = s.parseSelectorProps(selExpr)
+		err = s.parseSelectorProps(selector)
 		if err != nil {
 			return nil, err
 		}
-		selExpr.EndPos = s.t.Offset()
-		return selExpr, nil
+		selector.Wildcard = true
+		selector.calculateEnd(s.t.Offset())
+		return selector, nil
 	}
 
 	if s.except(LBRACE) {
@@ -1002,36 +1019,33 @@ func (s *parser) parseSelectorExpr() (expr Expr, err error) {
 				continue
 			}
 			if s.except(MUL) {
-				selExpr.Wildcard = true
+				selector.Wildcard = true
 				continue
 			}
 			i++
 			if !s.except(STRING) {
 				return nil, s.error()
 			}
-			if selExpr.Args == nil {
-				selExpr.Args = make(map[string]struct{})
+			if selector.Args == nil {
+				selector.Args = make(map[string]struct{})
 			}
-			selExpr.Args[trim(s.t.TokenText())] = struct{}{}
+			selector.Args[trim(s.t.TokenText())] = struct{}{}
 		}
 		if i == 0 {
-			selExpr.Wildcard = true
+			selector.Wildcard = true
 		}
 	}
 
 	s.next()
 
 	if s.except(COLON) {
-		err = s.parseSelectorProps(selExpr)
+		err = s.parseSelectorProps(selector)
 		if err != nil {
 			return nil, err
 		}
-		selExpr.EndPos = s.t.Offset()
-		return selExpr, nil
 	}
-
-	selExpr.EndPos = s.t.Offset()
-	return selExpr, nil
+	selector.calculateEnd(s.t.Offset())
+	return selector, nil
 }
 
 func (s *parser) error() error {

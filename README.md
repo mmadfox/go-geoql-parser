@@ -116,13 +116,6 @@ This data type is used to match values from INPUT data.
 
 ```go
  *geoqlparser.SelectorExpr
-
-type SelectorExpr struct {
-    Ident    string              // selector name
-    Args     map[string]struct{} // device ids
-    Wildcard bool                // indicates the current device
-    Props    []Expr              // some props
-}
 ```
 
 - valid characters: *a-zA-Z_0-9*
@@ -142,11 +135,14 @@ tracker_speed in 1mph .. 40mph
 tracker_index1 in 1 .. 10
 someTextToo in 1mph .. 40mph 
 ```
-### Get some value from devices by their IDs
+### Get some value from other devices by their IDs
 ```text
-tracker_speed{"786d9e27-f277-4d5d-b658-3198c133c43d", "786d9e27-f277-4d5d-b658-3198c133c43b"} in 1mph .. 40mph
+tracker_speed{
+    "786d9e27-f277-4d5d-b658-3198c133c43d", 
+    "786d9e27-f277-4d5d-b658-3198c133c43b"
+} in 1mph .. 40mph
 ```
-### Get some values from current device and from devices by their IDs
+### Get some values from current device and from other devices by their IDs
 ```text
 tracker_speed{*, "786d9e27-f277-4d5d-b658-3198c133c43d", "786d9e27-f277-4d5d-b658-3198c133c43b"} in 1mph .. 40mph
 ```
@@ -159,6 +155,8 @@ tracker_coords:1km // radius 1km
 coords{*}:1km,2km  // radius 1km or 2km
 someIndex:1,2,3    // some index 
 ads:2,6            // some index too
+selector{"id1", "id2", *}:1km,6km,12km
+h3Index:1,2        // same as calculating index h3 with levels 1 and 2 
 ```
 
 ## Wildcard
@@ -323,7 +321,7 @@ tracker_coords - selector for longitude and latitude current device
 ```text
 tracker_coords intersects point[114.60937499999999, 69.90011762668541]
 ```
-with radius 500 meters or 500 kilometers 
+with radius 500 meters or 50 kilometers 
 ```text
 tracker_coords intersects point[114.60937499999999, 69.90011762668541]:500m
 tracker_coords intersects point[114.60937499999999, 69.90011762668541]:50Km

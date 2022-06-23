@@ -25,6 +25,27 @@ type (
 	Vector uint8
 )
 
+var unitSizes = map[Unit]Pos{
+	Kph:        3,
+	Mph:        3,
+	Celsius:    1,
+	Fahrenheit: 1,
+	Kilometer:  2,
+	Meter:      1,
+	Bar:        3,
+	Psi:        3,
+	AM:         2,
+	PM:         2,
+}
+
+func (u Unit) size() Pos {
+	p, ok := unitSizes[u]
+	if !ok {
+		return 0
+	}
+	return p
+}
+
 func (u Unit) String() (s string) {
 	switch u {
 	default:
