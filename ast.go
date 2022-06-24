@@ -1,8 +1,8 @@
 package geoqlparser
 
 import (
-	"bytes"
 	"fmt"
+	"io"
 	"strconv"
 	"time"
 )
@@ -15,7 +15,7 @@ type Expr interface {
 	Pos() Pos
 	End() Pos
 
-	format(b *bytes.Buffer, padding string, inline bool)
+	format(b io.StringWriter, padding string, inline bool)
 	isExpr()
 }
 
@@ -95,10 +95,6 @@ type WildcardLit struct {
 	lpos Pos
 }
 
-func (e *WildcardLit) format(b *bytes.Buffer, _ string, _ bool) {
-	b.WriteRune('*')
-}
-
 type CalendarLit struct {
 	Kind                                    Token
 	Year, Day, Hours, Minutes, Seconds, Val int
@@ -133,15 +129,6 @@ var shortMonthNames = []string{
 	"Dec",
 }
 
-func (e *CalendarLit) format(b *bytes.Buffer, _ string, _ bool) {
-	switch e.Kind {
-	case WEEKDAY:
-		b.WriteString(shortDayNames[e.Val])
-	case MONTH:
-		b.WriteString(shortMonthNames[e.Val])
-	}
-}
-
 type GeometryPointExpr struct {
 	Val    [2]float64
 	Radius *DistanceLit
@@ -163,10 +150,24 @@ type GeometryLineExpr struct {
 	rpos   Pos
 }
 
+func (e *GeometryLineExpr) needExpand() bool {
+	return len(e.Val) > 4
+}
+
 type GeometryPolygonExpr struct {
 	Val  [][][2]float64
 	lpos Pos
 	rpos Pos
+}
+
+func (e *GeometryPolygonExpr) needExpand() (ok bool) {
+	for i := 0; i < len(e.Val); i++ {
+		if len(e.Val[i]) > 4 {
+			ok = true
+			break
+		}
+	}
+	return
 }
 
 func (e *GeometryPolygonExpr) HasHoles() bool {
@@ -185,7 +186,7 @@ type IntLit struct {
 	rpos Pos
 }
 
-func (e *IntLit) format(b *bytes.Buffer, _ string, _ bool) {
+func (e *IntLit) format(b io.StringWriter, padding string, inline bool) {
 	b.WriteString(strconv.Itoa(e.Val))
 }
 
@@ -263,77 +264,11 @@ func dt2str(v int) string {
 	return s
 }
 
-//func (e *DateLit) format(b *bytes.Buffer, _ string, _ bool) {
-//	b.WriteString(strconv.Itoa(e.Year))
-//	b.WriteRune('-')
-//	b.WriteString(dt2str(int(e.Month)))
-//	b.WriteRune('-')
-//	b.WriteString(dt2str(e.Day))
-//}
-
-//type TimeLit struct {
-//	Hour, Minute, Seconds int
-//	U                     Unit
-//	lpos                  Pos
-//	rpos                  Pos
-//}
-
-//func (e *TimeLit) format(b *bytes.Buffer, _ string, _ bool) {
-//	switch e.U {
-//	case AM, PM:
-//		b.WriteString(strconv.Itoa(e.Hour))
-//		b.WriteRune(':')
-//		b.WriteString(dt2str(e.Minute))
-//		if e.Seconds > 0 {
-//			b.WriteRune(':')
-//			b.WriteString(dt2str(e.Seconds))
-//		}
-//		b.WriteString(e.U.String())
-//	default:
-//		b.WriteString(dt2str(e.Hour))
-//		b.WriteRune(':')
-//		b.WriteString(dt2str(e.Minute))
-//		if e.Seconds > 0 {
-//			b.WriteRune(':')
-//			b.WriteString(dt2str(e.Seconds))
-//		}
-//	}
-//}
-
 type RefLit struct {
 	ID   string
 	lpos Pos
 	rpos Pos
 }
-
-func (e *RefLit) format(b *bytes.Buffer, _ string, _ bool) {
-	b.WriteRune('@')
-	b.WriteString(e.ID)
-}
-
-//type DateTimeLit struct {
-//	Year, Day, Hours, Minutes, Seconds int
-//	Month                              time.Month
-//	U                                  Unit
-//	lpos                               Pos
-//	rpos                               Pos
-//}
-
-//func (e *DateTimeLit) format(b *bytes.Buffer, _ string, _ bool) {
-//	b.WriteString(strconv.Itoa(e.Year))
-//	b.WriteRune('-')
-//	b.WriteString(dt2str(int(e.Month)))
-//	b.WriteRune('-')
-//	b.WriteString(dt2str(e.Day))
-//	b.WriteRune('T')
-//	b.WriteString(dt2str(e.Hours))
-//	b.WriteRune(':')
-//	b.WriteString(dt2str(e.Minutes))
-//	if e.Seconds > 0 {
-//		b.WriteRune(':')
-//		b.WriteString(dt2str(e.Seconds))
-//	}
-//}
 
 type SelectorExpr struct {
 	Ident    string              // selector name
@@ -378,7 +313,7 @@ type BooleanLit struct {
 	rpos Pos
 }
 
-func (e *BooleanLit) format(b *bytes.Buffer, _ string, _ bool) {
+func (e *BooleanLit) format(b io.StringWriter, padding string, inline bool) {
 	switch e.Val {
 	case true:
 		b.WriteString("true")

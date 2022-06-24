@@ -1,0 +1,80 @@
+package geoqlparser
+
+import (
+	"bytes"
+	"testing"
+)
+
+func TestFormat(t *testing.T) {
+	buf := bytes.NewBuffer(nil)
+	stmt, err := Parse(`
+		trigger 
+		set 
+		a=1;
+		b=5345345345;
+  		some=345345345345
+		floatval=22.22
+		durationval=7h40m
+		temp1=+40C
+		temp2=-30C
+		temp3=0C
+		pointval=point[-1.1, 1.1]:1km
+		lineval3 = line[[2.1, 3.1], [3.1, 5.5], [5.5, 5.5], [5.5, 5.5]]:44M;
+		lineval = line[[1.1, 1.1], [2.1, 3.1], [3.1, 5.5], [5.5, 5.5], [5.5, 5.5]];
+		linevall = line[
+			[1.1, 1.1], [2.1, 3.1], [3.1, 5.5], [5.5, 5.5],  
+			[5.5, 5.5], [5.5, 5.5], [5.5, 5.5], [5.5, 5.5],
+			[5.5, 5.5], [5.5, 5.5], [5.5, 5.5], [5.5, 5.5]
+		]:44km;
+		polygonval2 = polygon[[[1.1,1.1], [1.1,1.1], [1.1,1.1]]]; 
+		polygonvla = polygon[
+			[
+				[1.1, 1.1], [1.1, 1.1], [1.1, 1.1], [1.1, 1.1], 
+				[1.1, 1.1], [1.1,1.1]
+			],
+			[
+   				[1.1,1.1], [1.1,1.1]	
+			]
+		];
+		multipolygon1 = multipolygon[
+			polygon[
+			[
+				[1.1, 1.1], [1.1, 1.1], [1.1, 1.1], [1.1, 1.1], 
+				[1.1, 1.1], [1.1,1.1]
+			],
+			[
+   				[1.1,1.1], [1.1,1.1]	
+			]],
+		    polygon[[[1.1,1.1], [1.1,1.1], [1.1,1.1]]]	
+		];
+		collection1 = collection[
+			polygon[
+			[
+				[1.1, 1.1], [1.1, 1.1], [1.1, 1.1], [1.1, 1.1], 
+				[1.1, 1.1], [1.1,1.1]
+			],
+			[
+   				[1.1,1.1], [1.1,1.1]	
+			]],
+			line[
+			[1.1, 1.1], [2.1, 3.1], [3.1, 5.5], [5.5, 5.5],  
+			[5.5, 5.5], [5.5, 5.5], [5.5, 5.5], [5.5, 5.5],
+			[5.5, 5.5], [5.5, 5.5], [5.5, 5.5], [5.5, 5.5]
+			]:44km
+		]
+   
+		when 1*1 == 2
+repeat 1 every 10s
+reset after 34h
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Format(buf, stmt); err != nil {
+		t.Fatal(err)
+	}
+	_, err = Parse(buf.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+}

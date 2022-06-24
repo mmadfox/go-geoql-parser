@@ -159,6 +159,9 @@ func (s *parser) parseSet(stmt *TriggerStmt) error {
 		if s.except(EOF) {
 			break
 		}
+		if !s.except(SELECTOR) {
+			return s.error()
+		}
 		ident := IdentLit{Val: s.t.TokenText(), lpos: s.t.Offset()}
 		ident.rpos = s.t.Offset() + Pos(len(ident.Val)-1)
 		s.t.Unwind()
