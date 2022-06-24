@@ -20,8 +20,8 @@ WHEN
 		tracker_speed in 10Kph .. 40Kph 
 		or tracker_speed in [10Kph .. 40Kph, 10Kph .. 40Kph, 10Kph .. 40Kph]
 	)
-REPEAT 5 times 10s interval
-RESET after 1h0m0s
+REPEAT 3 every 10s
+RESET after 1h
 ```
 
 # Table of contents

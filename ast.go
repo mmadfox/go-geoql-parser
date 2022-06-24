@@ -2,8 +2,8 @@ package geoqlparser
 
 import (
 	"bytes"
+	"fmt"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -23,7 +23,7 @@ func (t *TriggerStmt) isStatement() {}
 
 // TriggerStmt represents a TRIGGER statement.
 type TriggerStmt struct {
-	Set            map[string]Expr
+	Vars           []*AssignStmt
 	When           Expr
 	RepeatCount    Expr
 	RepeatInterval Expr
@@ -32,84 +32,43 @@ type TriggerStmt struct {
 	rpos           Pos
 }
 
-func (t *TriggerStmt) String() string {
-	if t == nil {
-		return ""
+func (t *TriggerStmt) SetVar(v *AssignStmt) error {
+	if t.isAssigned(v.Left.Val) {
+		return fmt.Errorf("variable %s already assigned", v.Left.Val)
 	}
-	buf := bytes.NewBuffer(nil)
-	formatTriggerStmt(t, buf)
-	return buf.String()
+	t.Vars = append(t.Vars, v)
+	return nil
 }
 
-func (t *TriggerStmt) format(b *bytes.Buffer, _ string, _ bool) {
-	formatTriggerStmt(t, b)
-}
-
-func formatTriggerStmt(t *TriggerStmt, b *bytes.Buffer) {
-	padding := "\t"
-	b.WriteString("TRIGGER")
-	b.WriteRune('\n')
-	if len(t.Set) > 0 {
-		format := func(expr Expr, vname string) {
-			b.WriteString(padding)
-			b.WriteString(vname)
-			b.WriteRune(' ')
-			b.WriteRune('=')
-			b.WriteRune(' ')
-			expr.format(b, padding, false)
-			b.WriteRune('\n')
-		}
-		b.WriteString("SET")
-		b.WriteRune('\n')
-		for vname, expr := range t.Set {
-			if IsGeometryExpr(expr) {
-				continue
-			}
-			format(expr, vname)
-		}
-		for vname, expr := range t.Set {
-			if !IsGeometryExpr(expr) {
-				continue
-			}
-			format(expr, vname)
+func (t *TriggerStmt) isAssigned(varname string) bool {
+	for i := 0; i < len(t.Vars); i++ {
+		if t.Vars[i].Left.Val == varname {
+			return true
 		}
 	}
-	b.WriteString("WHEN")
-	b.WriteRune('\n')
-	b.WriteString(padding)
-	t.When.format(b, padding, true)
-	b.WriteRune('\n')
-
-	if t.RepeatCount != nil && t.RepeatInterval != nil {
-		b.WriteString("REPEAT")
-		b.WriteRune(' ')
-		t.RepeatCount.format(b, padding, true)
-		b.WriteRune(' ')
-		b.WriteString("times")
-		b.WriteRune(' ')
-		t.RepeatInterval.format(b, padding, true)
-		b.WriteRune(' ')
-		b.WriteString("interval")
-		b.WriteRune('\n')
-	}
-
-	if t.ResetAfter != nil {
-		b.WriteString("RESET after")
-		b.WriteRune(' ')
-		t.ResetAfter.format(b, padding, true)
-		b.WriteRune('\n')
-	}
-}
-
-func formatFloat(b *bytes.Buffer, v float64) {
-	b.WriteString(strconv.FormatFloat(v, 'f', -1, 64))
+	return false
 }
 
 func (t *TriggerStmt) initVars() {
-	if t.Set != nil {
+	if t.Vars != nil {
 		return
 	}
-	t.Set = make(map[string]Expr)
+	t.Vars = make([]*AssignStmt, 0)
+}
+
+func (t *TriggerStmt) findVar(varname string) (*AssignStmt, error) {
+	for i := 0; i < len(t.Vars); i++ {
+		if t.Vars[i].Left.Val == varname {
+			return t.Vars[i], nil
+		}
+	}
+	return nil, fmt.Errorf("variable %s not found", varname)
+}
+
+type AssignStmt struct {
+	Left   *IdentLit
+	Right  Expr
+	TokPos Pos
 }
 
 type ArrayExpr struct {
@@ -119,18 +78,6 @@ type ArrayExpr struct {
 	rpos Pos
 }
 
-func (e *ArrayExpr) format(b *bytes.Buffer, padding string, inline bool) {
-	b.WriteRune('[')
-	for i, expr := range e.List {
-		expr.format(b, padding, inline)
-		if i+1 < len(e.List) {
-			b.WriteRune(',')
-			b.WriteRune(' ')
-		}
-	}
-	b.WriteRune(']')
-}
-
 type BinaryExpr struct {
 	Op    Token
 	Left  Expr
@@ -138,59 +85,10 @@ type BinaryExpr struct {
 	OpPos Pos
 }
 
-func (e *BinaryExpr) format(b *bytes.Buffer, padding string, inline bool) {
-	e.Left.format(b, padding, inline)
-	var nospace bool
-	op := KeywordString(e.Op)
-	var nl bool
-	switch e.Op {
-	case AND, OR:
-		nl = true
-	case ADD, SUB, MUL, QUO, REM:
-		nospace = true
-	}
-	if !nospace {
-		b.WriteRune(' ')
-	}
-	if nl {
-		b.WriteRune('\n')
-		b.WriteString(padding)
-	}
-	b.WriteString(op)
-	if !nospace {
-		b.WriteRune(' ')
-	}
-	e.Right.format(b, padding, inline)
-}
-
 type ParenExpr struct {
 	Expr Expr
 	lpos Pos
 	rpos Pos
-}
-
-func (e *ParenExpr) format(b *bytes.Buffer, padding string, inline bool) {
-	expand := true
-	switch node := e.Expr.(type) {
-	case *BinaryExpr:
-		_, lok := node.Left.(*BinaryExpr)
-		_, rok := node.Right.(*BinaryExpr)
-		if !lok && !rok {
-			expand = false
-		}
-	}
-	pad2 := padding + "\t"
-	b.WriteRune('(')
-	if expand {
-		b.WriteRune('\n')
-		b.WriteString(pad2)
-	}
-	e.Expr.format(b, pad2, inline)
-	if expand {
-		b.WriteRune('\n')
-		b.WriteString(padding)
-	}
-	b.WriteRune(')')
 }
 
 type WildcardLit struct {
@@ -202,10 +100,12 @@ func (e *WildcardLit) format(b *bytes.Buffer, _ string, _ bool) {
 }
 
 type CalendarLit struct {
-	Kind Token
-	Val  int
-	lpos Pos
-	rpos Pos
+	Kind                                    Token
+	Year, Day, Hours, Minutes, Seconds, Val int
+	Month                                   time.Month
+	U                                       Unit
+	lpos                                    Pos
+	rpos                                    Pos
 }
 
 var shortDayNames = []string{
@@ -249,20 +149,6 @@ type GeometryPointExpr struct {
 	rpos   Pos
 }
 
-func (e *GeometryPointExpr) format(b *bytes.Buffer, padding string, inline bool) {
-	b.WriteString("point")
-	b.WriteRune('[')
-	formatFloat(b, e.Val[0])
-	b.WriteRune(',')
-	b.WriteRune(' ')
-	formatFloat(b, e.Val[1])
-	b.WriteRune(']')
-	if e.Radius != nil {
-		b.WriteRune(':')
-		e.Radius.format(b, padding, inline)
-	}
-}
-
 type GeometryMultiObject struct {
 	Kind Token
 	Val  []Expr
@@ -270,78 +156,11 @@ type GeometryMultiObject struct {
 	rpos Pos
 }
 
-func (e *GeometryMultiObject) format(b *bytes.Buffer, padding string, inline bool) {
-	switch e.Kind {
-	case GEOMETRY_MULTIPOINT:
-		b.WriteString("multipoint")
-	case GEOMETRY_MULTILINE:
-		b.WriteString("multiline")
-	case GEOMETRY_MULTIPOLYGON:
-		b.WriteString("multipolygon")
-	}
-	b.WriteRune('[')
-	pad2 := padding + "\t"
-	for i := 0; i < len(e.Val); i++ {
-		if !inline {
-			b.WriteRune('\n')
-			if e.Kind == GEOMETRY_MULTIPOINT {
-				b.WriteString(pad2)
-			} else {
-				b.WriteString(padding)
-			}
-		}
-		e.Val[i].format(b, padding, inline)
-		if i+1 < len(e.Val) {
-			b.WriteRune(',')
-			b.WriteRune(' ')
-		}
-	}
-	if !inline && e.Kind == GEOMETRY_MULTIPOINT {
-		b.WriteRune('\n')
-		b.WriteString(padding)
-	}
-	b.WriteRune(']')
-}
-
 type GeometryLineExpr struct {
 	Val    [][2]float64
 	Margin *DistanceLit
 	lpos   Pos
 	rpos   Pos
-}
-
-func (e *GeometryLineExpr) format(b *bytes.Buffer, padding string, inline bool) {
-	b.WriteString("line")
-	b.WriteRune('[')
-	var pad2 string
-	if !inline {
-		pad2 = padding + "\t"
-	}
-	for i := 0; i < len(e.Val); i++ {
-		if !inline {
-			b.WriteRune('\n')
-			b.WriteString(pad2)
-		}
-		b.WriteRune('[')
-		formatFloat(b, e.Val[i][0])
-		b.WriteRune(',')
-		b.WriteRune(' ')
-		formatFloat(b, e.Val[i][1])
-		b.WriteRune(']')
-		if i+1 < len(e.Val) {
-			b.WriteRune(',')
-			b.WriteRune(' ')
-		}
-	}
-	if !inline {
-		b.WriteRune('\n')
-		b.WriteString(padding)
-	}
-	b.WriteRune(']')
-	if e.Margin != nil {
-		b.WriteRune(':')
-		e.Margin.format(b, padding, inline)
-	}
 }
 
 type GeometryPolygonExpr struct {
@@ -354,81 +173,10 @@ func (e *GeometryPolygonExpr) HasHoles() bool {
 	return len(e.Val) > 1
 }
 
-func (e *GeometryPolygonExpr) format(b *bytes.Buffer, padding string, inline bool) {
-	b.WriteString("polygon")
-	b.WriteRune('[')
-	var pad2, pad3 string
-	if !inline {
-		pad2 = padding + "\t"
-		pad3 = padding + "\t\t"
-		b.WriteRune('\n')
-		b.WriteString(pad2)
-	}
-	for i := 0; i < len(e.Val); i++ {
-		b.WriteRune('[')
-		for j := 0; j < len(e.Val[i]); j++ {
-			if !inline {
-				b.WriteRune('\n')
-				b.WriteString(pad3)
-			}
-			b.WriteRune('[')
-			formatFloat(b, e.Val[i][j][0])
-			b.WriteRune(',')
-			b.WriteRune(' ')
-			formatFloat(b, e.Val[i][j][1])
-			b.WriteRune(']')
-			if j+1 < len(e.Val[i]) {
-				b.WriteRune(',')
-				b.WriteRune(' ')
-			}
-		}
-		if !inline {
-			b.WriteRune('\n')
-			b.WriteString(pad2)
-		}
-		b.WriteRune(']')
-		if i+1 < len(e.Val) {
-			b.WriteRune(',')
-			b.WriteRune(' ')
-		}
-	}
-	if !inline {
-		b.WriteRune('\n')
-		b.WriteString(padding)
-	}
-	b.WriteRune(']')
-}
-
 type GeometryCollectionExpr struct {
 	Objects []Expr
 	lpos    Pos
 	rpos    Pos
-}
-
-func (e *GeometryCollectionExpr) format(b *bytes.Buffer, padding string, inline bool) {
-	b.WriteString("collection")
-	b.WriteRune('[')
-	if !inline {
-		b.WriteRune('\n')
-	}
-	newpad := strings.Repeat(padding, 2)
-	for i := 0; i < len(e.Objects); i++ {
-		if !inline {
-			b.WriteString(newpad)
-		}
-		e.Objects[i].format(b, newpad, inline)
-		if i+1 < len(e.Objects) {
-			b.WriteRune(',')
-			b.WriteRune(' ')
-		}
-		if !inline {
-			b.WriteRune('\n')
-		}
-	}
-	if !inline {
-		b.WriteString(padding)
-	}
-	b.WriteRune(']')
 }
 
 type IntLit struct {
@@ -448,24 +196,10 @@ type RangeExpr struct {
 	rpos Pos
 }
 
-func (e *RangeExpr) format(b *bytes.Buffer, padding string, inline bool) {
-	e.Low.format(b, padding, inline)
-	b.WriteRune(' ')
-	b.WriteRune('.')
-	b.WriteRune('.')
-	b.WriteRune(' ')
-	e.High.format(b, padding, inline)
-}
-
 type PercentLit struct {
 	Val  float64
 	lpos Pos
 	rpos Pos
-}
-
-func (e *PercentLit) format(b *bytes.Buffer, _ string, _ bool) {
-	formatFloat(b, e.Val)
-	b.WriteString("%")
 }
 
 type StringLit struct {
@@ -474,20 +208,10 @@ type StringLit struct {
 	rpos Pos
 }
 
-func (e *StringLit) format(b *bytes.Buffer, _ string, _ bool) {
-	b.WriteRune('"')
-	b.WriteString(e.Val)
-	b.WriteRune('"')
-}
-
 type FloatLit struct {
 	Val  float64
 	lpos Pos
 	rpos Pos
-}
-
-func (e *FloatLit) format(b *bytes.Buffer, _ string, _ bool) {
-	formatFloat(b, e.Val)
 }
 
 type DurationLit struct {
@@ -496,24 +220,12 @@ type DurationLit struct {
 	rpos Pos
 }
 
-func (e *DurationLit) format(b *bytes.Buffer, _ string, _ bool) {
-	b.WriteString(e.Val.String())
-}
-
 type TemperatureLit struct {
 	Val  float64
 	U    Unit
-	Vec  Vector
+	Vec  Sign
 	lpos Pos
 	rpos Pos
-}
-
-func (e *TemperatureLit) format(b *bytes.Buffer, _ string, _ bool) {
-	if e.Val != 0 {
-		b.WriteString(e.Vec.String())
-	}
-	formatFloat(b, e.Val)
-	b.WriteString(e.U.String())
 }
 
 type PressureLit struct {
@@ -523,21 +235,11 @@ type PressureLit struct {
 	rpos Pos
 }
 
-func (e *PressureLit) format(b *bytes.Buffer, _ string, _ bool) {
-	formatFloat(b, e.Val)
-	b.WriteString(e.U.String())
-}
-
 type DistanceLit struct {
 	Val  float64
 	U    Unit
 	lpos Pos
 	rpos Pos
-}
-
-func (e *DistanceLit) format(b *bytes.Buffer, _ string, _ bool) {
-	formatFloat(b, e.Val)
-	b.WriteString(e.U.String())
 }
 
 type SpeedLit struct {
@@ -547,16 +249,10 @@ type SpeedLit struct {
 	rpos Pos
 }
 
-func (e *SpeedLit) format(b *bytes.Buffer, _ string, _ bool) {
-	formatFloat(b, e.Val)
-	b.WriteString(e.U.String())
-}
-
-type DateLit struct {
-	Year, Day int
-	Month     time.Month
-	lpos      Pos
-	rpos      Pos
+type IdentLit struct {
+	Val  string
+	lpos Pos
+	rpos Pos
 }
 
 func dt2str(v int) string {
@@ -567,77 +263,77 @@ func dt2str(v int) string {
 	return s
 }
 
-func (e *DateLit) format(b *bytes.Buffer, _ string, _ bool) {
-	b.WriteString(strconv.Itoa(e.Year))
-	b.WriteRune('-')
-	b.WriteString(dt2str(int(e.Month)))
-	b.WriteRune('-')
-	b.WriteString(dt2str(e.Day))
-}
+//func (e *DateLit) format(b *bytes.Buffer, _ string, _ bool) {
+//	b.WriteString(strconv.Itoa(e.Year))
+//	b.WriteRune('-')
+//	b.WriteString(dt2str(int(e.Month)))
+//	b.WriteRune('-')
+//	b.WriteString(dt2str(e.Day))
+//}
 
-type TimeLit struct {
-	Hour, Minute, Seconds int
-	U                     Unit
-	lpos                  Pos
-	rpos                  Pos
-}
+//type TimeLit struct {
+//	Hour, Minute, Seconds int
+//	U                     Unit
+//	lpos                  Pos
+//	rpos                  Pos
+//}
 
-func (e *TimeLit) format(b *bytes.Buffer, _ string, _ bool) {
-	switch e.U {
-	case AM, PM:
-		b.WriteString(strconv.Itoa(e.Hour))
-		b.WriteRune(':')
-		b.WriteString(dt2str(e.Minute))
-		if e.Seconds > 0 {
-			b.WriteRune(':')
-			b.WriteString(dt2str(e.Seconds))
-		}
-		b.WriteString(e.U.String())
-	default:
-		b.WriteString(dt2str(e.Hour))
-		b.WriteRune(':')
-		b.WriteString(dt2str(e.Minute))
-		if e.Seconds > 0 {
-			b.WriteRune(':')
-			b.WriteString(dt2str(e.Seconds))
-		}
-	}
-}
+//func (e *TimeLit) format(b *bytes.Buffer, _ string, _ bool) {
+//	switch e.U {
+//	case AM, PM:
+//		b.WriteString(strconv.Itoa(e.Hour))
+//		b.WriteRune(':')
+//		b.WriteString(dt2str(e.Minute))
+//		if e.Seconds > 0 {
+//			b.WriteRune(':')
+//			b.WriteString(dt2str(e.Seconds))
+//		}
+//		b.WriteString(e.U.String())
+//	default:
+//		b.WriteString(dt2str(e.Hour))
+//		b.WriteRune(':')
+//		b.WriteString(dt2str(e.Minute))
+//		if e.Seconds > 0 {
+//			b.WriteRune(':')
+//			b.WriteString(dt2str(e.Seconds))
+//		}
+//	}
+//}
 
-type VarLit struct {
+type RefLit struct {
 	ID   string
 	lpos Pos
 	rpos Pos
 }
 
-func (e *VarLit) format(b *bytes.Buffer, _ string, _ bool) {
+func (e *RefLit) format(b *bytes.Buffer, _ string, _ bool) {
 	b.WriteRune('@')
 	b.WriteString(e.ID)
 }
 
-type DateTimeLit struct {
-	Year, Day, Hours, Minutes, Seconds int
-	Month                              time.Month
-	U                                  Unit
-	lpos                               Pos
-	rpos                               Pos
-}
+//type DateTimeLit struct {
+//	Year, Day, Hours, Minutes, Seconds int
+//	Month                              time.Month
+//	U                                  Unit
+//	lpos                               Pos
+//	rpos                               Pos
+//}
 
-func (e *DateTimeLit) format(b *bytes.Buffer, _ string, _ bool) {
-	b.WriteString(strconv.Itoa(e.Year))
-	b.WriteRune('-')
-	b.WriteString(dt2str(int(e.Month)))
-	b.WriteRune('-')
-	b.WriteString(dt2str(e.Day))
-	b.WriteRune('T')
-	b.WriteString(dt2str(e.Hours))
-	b.WriteRune(':')
-	b.WriteString(dt2str(e.Minutes))
-	if e.Seconds > 0 {
-		b.WriteRune(':')
-		b.WriteString(dt2str(e.Seconds))
-	}
-}
+//func (e *DateTimeLit) format(b *bytes.Buffer, _ string, _ bool) {
+//	b.WriteString(strconv.Itoa(e.Year))
+//	b.WriteRune('-')
+//	b.WriteString(dt2str(int(e.Month)))
+//	b.WriteRune('-')
+//	b.WriteString(dt2str(e.Day))
+//	b.WriteRune('T')
+//	b.WriteString(dt2str(e.Hours))
+//	b.WriteRune(':')
+//	b.WriteString(dt2str(e.Minutes))
+//	if e.Seconds > 0 {
+//		b.WriteRune(':')
+//		b.WriteString(dt2str(e.Seconds))
+//	}
+//}
 
 type SelectorExpr struct {
 	Ident    string              // selector name
@@ -650,7 +346,7 @@ type SelectorExpr struct {
 
 func (e *SelectorExpr) calculateEnd(p Pos) {
 	if len(e.Props) > 0 {
-		e.rpos = e.Props[len(e.Props)-1].End() + 1
+		e.rpos = e.Props[len(e.Props)-1].End()
 	} else {
 		if p > 0 {
 			p -= 1
@@ -676,57 +372,6 @@ func (e *SelectorExpr) needExpand() (ok bool) {
 	return
 }
 
-func (e *SelectorExpr) format(b *bytes.Buffer, padding string, inline bool) {
-	b.WriteString(e.Ident)
-	if len(e.Args) > 0 {
-		b.WriteRune('{')
-		var i int
-		var expand bool
-		var pad2 string
-		if !inline {
-			expand = e.needExpand()
-			if expand {
-				pad2 = padding + "\t"
-			}
-		}
-		if e.Wildcard {
-			b.WriteRune('*')
-			if len(e.Args) > 0 {
-				b.WriteRune(',')
-				b.WriteRune(' ')
-			}
-		}
-		for k := range e.Args {
-			if !inline && expand {
-				b.WriteRune('\n')
-				b.WriteString(pad2)
-			}
-			b.WriteRune('"')
-			b.WriteString(k)
-			b.WriteRune('"')
-			if i+1 < len(e.Args) {
-				b.WriteRune(',')
-				b.WriteRune(' ')
-			}
-			i++
-		}
-		if !inline && expand {
-			b.WriteRune('\n')
-			b.WriteString(padding)
-		}
-		b.WriteRune('}')
-	}
-	if len(e.Props) > 0 {
-		b.WriteRune(':')
-		for i := 0; i < len(e.Props); i++ {
-			e.Props[i].format(b, padding, inline)
-			if i+1 < len(e.Props) {
-				b.WriteRune(',')
-			}
-		}
-	}
-}
-
 type BooleanLit struct {
 	Val  bool
 	lpos Pos
@@ -739,15 +384,6 @@ func (e *BooleanLit) format(b *bytes.Buffer, _ string, _ bool) {
 		b.WriteString("true")
 	case false:
 		b.WriteString("false")
-	}
-	return
-}
-
-func IsGeometryExpr(expr Expr) (ok bool) {
-	switch expr.(type) {
-	case *GeometryPointExpr, *GeometryCollectionExpr,
-		*GeometryMultiObject, *GeometryPolygonExpr, *GeometryLineExpr:
-		ok = true
 	}
 	return
 }
@@ -769,16 +405,15 @@ func (e *GeometryLineExpr) isExpr()       {}
 func (e *GeometryPolygonExpr) isExpr()    {}
 func (e *GeometryMultiObject) isExpr()    {}
 func (e *GeometryCollectionExpr) isExpr() {}
-func (e *DateLit) isExpr()                {}
-func (e *TimeLit) isExpr()                {}
-func (e *DateTimeLit) isExpr()            {}
 func (e *ArrayExpr) isExpr()              {}
 func (e *StringLit) isExpr()              {}
 func (e *PercentLit) isExpr()             {}
-func (e *VarLit) isExpr()                 {}
+func (e *RefLit) isExpr()                 {}
 func (e *RangeExpr) isExpr()              {}
 func (e *CalendarLit) isExpr()            {}
 func (t *TriggerStmt) isExpr()            {}
+func (e *IdentLit) isExpr()               {}
+func (e *AssignStmt) isExpr()             {}
 
 func (e *BinaryExpr) Pos() Pos             { return e.Left.Pos() }
 func (e *BinaryExpr) End() Pos             { return e.Right.Pos() }
@@ -814,23 +449,21 @@ func (e *GeometryMultiObject) Pos() Pos    { return e.lpos }
 func (e *GeometryMultiObject) End() Pos    { return e.rpos }
 func (e *GeometryCollectionExpr) Pos() Pos { return e.lpos }
 func (e *GeometryCollectionExpr) End() Pos { return e.rpos }
-func (e *DateLit) Pos() Pos                { return e.lpos }
-func (e *DateLit) End() Pos                { return e.rpos }
-func (e *TimeLit) Pos() Pos                { return e.lpos }
-func (e *TimeLit) End() Pos                { return e.rpos }
-func (e *DateTimeLit) Pos() Pos            { return e.lpos }
-func (e *DateTimeLit) End() Pos            { return e.rpos }
 func (e *ArrayExpr) Pos() Pos              { return e.lpos }
 func (e *ArrayExpr) End() Pos              { return e.rpos }
 func (e *StringLit) Pos() Pos              { return e.lpos }
 func (e *StringLit) End() Pos              { return e.rpos }
 func (e *PercentLit) Pos() Pos             { return e.lpos }
 func (e *PercentLit) End() Pos             { return e.rpos }
-func (e *VarLit) Pos() Pos                 { return e.lpos }
-func (e *VarLit) End() Pos                 { return e.rpos }
+func (e *RefLit) Pos() Pos                 { return e.lpos }
+func (e *RefLit) End() Pos                 { return e.rpos }
 func (e *RangeExpr) Pos() Pos              { return e.lpos }
 func (e *RangeExpr) End() Pos              { return e.rpos }
 func (e *CalendarLit) Pos() Pos            { return e.lpos }
 func (e *CalendarLit) End() Pos            { return e.rpos }
 func (t *TriggerStmt) Pos() Pos            { return t.lpos }
 func (t *TriggerStmt) End() Pos            { return t.rpos }
+func (e *IdentLit) Pos() Pos               { return e.lpos }
+func (e *IdentLit) End() Pos               { return e.rpos }
+func (e *AssignStmt) Pos() Pos             { return e.Left.Pos() }
+func (e *AssignStmt) End() Pos             { return e.Right.End() }

@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestTokenizer_Scan(t *testing.T) {
+func TestTokenizerScan(t *testing.T) {
 	testCases := []struct {
 		name string
 		want []Token

@@ -1,8 +1,8 @@
 package geoqlparser
 
 const (
-	Positive Vector = 1
-	Negative Vector = 0
+	Plus  Sign = 1
+	Minus Sign = 2
 )
 
 const (
@@ -21,8 +21,8 @@ const (
 )
 
 type (
-	Unit   uint8
-	Vector uint8
+	Unit uint8
+	Sign uint8
 )
 
 var unitSizes = map[Unit]Pos{
@@ -138,7 +138,7 @@ func unitFromString(in string) (out Unit) {
 		out = Percent
 	case "rkm", "rKM", "Rkm", "km", "Km":
 		out = Kilometer
-	case "rm", "rM", "Rm", "M", "m", "met":
+	case "rm", "rM", "Rm", "M", "met":
 		out = Meter
 	case "kph", "KPH", "Kph":
 		out = Kph
@@ -160,11 +160,11 @@ func unitFromString(in string) (out Unit) {
 	return
 }
 
-func (v Vector) String() (s string) {
+func (v Sign) String() (s string) {
 	switch v {
-	case Positive:
+	case Plus:
 		s = "+"
-	case Negative:
+	case Minus:
 		s = "-"
 	}
 	return

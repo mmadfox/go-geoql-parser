@@ -28,8 +28,8 @@ func Walk(v Visitor, expr Expr) {
 			Walk(v, typ.List[i])
 		}
 	case *TriggerStmt:
-		if typ.Set != nil {
-			for _, expr := range typ.Set {
+		if typ.Vars != nil {
+			for _, expr := range typ.Vars {
 				Walk(v, expr)
 			}
 		}

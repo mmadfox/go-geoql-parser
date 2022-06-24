@@ -1,13 +1,15 @@
 package geoqlparser
 
 import (
-	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"strconv"
 	"strings"
 	"time"
 )
+
+var errNegativeValue = errors.New("value cannot be negative")
 
 func Parse(gql string) (Statement, error) {
 	r := strings.NewReader(gql)
@@ -22,7 +24,7 @@ type parser struct {
 	tok  Token
 	lit  string
 	err  error
-	neg  bool
+	sign Token
 	lpos Pos
 	rpos Pos
 }
@@ -50,6 +52,7 @@ func (s *parser) parseTriggerStmt() (stmt *TriggerStmt, err error) {
 		return nil, s.error()
 	}
 	stmt = new(TriggerStmt)
+	stmt.lpos = s.t.Offset()
 	if s.except(SET) {
 		if err = s.parseSet(stmt); err != nil {
 			return nil, err
@@ -74,7 +77,7 @@ func (s *parser) parseTriggerStmt() (stmt *TriggerStmt, err error) {
 			return nil, err
 		}
 	}
-	stmt.lpos = s.t.Offset()
+	stmt.rpos = s.t.Offset()
 	return stmt, nil
 }
 
@@ -110,22 +113,28 @@ func (s *parser) parseReset(stmt *TriggerStmt) (err error) {
 
 func (s *parser) parseRepeat(stmt *TriggerStmt) (err error) {
 	s.next()
+	if s.except(EOF, RESET) {
+		return
+	}
+
 	if !s.except(INT) {
 		return s.error()
 	}
-	intVal, err := s.parseIntTypes()
+
+	repeatCount, err := s.parseIntTypes()
 	if err != nil {
 		return err
 	}
-	iiv, ok := intVal.(*IntLit)
-	if !ok {
+	if _, ok := repeatCount.(*IntLit); !ok {
 		return s.error()
 	}
-	if iiv.Val < 2 {
-		return s.error()
+
+	stmt.RepeatCount = repeatCount
+	if s.except(EOF, RESET) {
+		return
 	}
-	if s.lit != "times" {
-		s.err = fmt.Errorf("got %s, expected times", s.lit)
+
+	if !s.except(SELECTOR) {
 		return s.error()
 	}
 	s.next()
@@ -133,22 +142,14 @@ func (s *parser) parseRepeat(stmt *TriggerStmt) (err error) {
 	if err != nil {
 		return err
 	}
-	if s.lit != "interval" {
-		s.err = fmt.Errorf("got %s, expected interval", s.lit)
+	if _, ok := dur.(*DurationLit); !ok {
 		return s.error()
 	}
-	_, ok = dur.(*DurationLit)
-	if !ok {
-		return s.error()
-	}
-	s.next()
 	stmt.RepeatInterval = dur
-	stmt.RepeatCount = intVal
 	return
 }
 
 func (s *parser) parseSet(stmt *TriggerStmt) error {
-	var varname string
 	s.next()
 	for {
 		if s.except(WHEN) {
@@ -158,21 +159,23 @@ func (s *parser) parseSet(stmt *TriggerStmt) error {
 		if s.except(EOF) {
 			break
 		}
-		varname = s.t.TokenText()
+		ident := IdentLit{Val: s.t.TokenText(), lpos: s.t.Offset()}
+		ident.rpos = s.t.Offset() + Pos(len(ident.Val)-1)
 		s.t.Unwind()
 		s.next()
 		if !s.except(ASSIGN) {
 			return s.error()
 		}
+		tokPos := s.t.Offset() - 1
 		expr, err := s.parseUnaryExpr()
 		if err != nil {
 			return err
 		}
-		if s.lit == ";" {
+		if s.except(SEMICOLON) {
 			s.next()
 		}
 		switch typ := expr.(type) {
-		case *VarLit:
+		case *RefLit:
 			return s.error()
 		case *ArrayExpr:
 			if typ.Kind == IDENT {
@@ -180,12 +183,15 @@ func (s *parser) parseSet(stmt *TriggerStmt) error {
 			}
 		}
 		stmt.initVars()
-		_, found := stmt.Set[varname]
-		if found {
-			s.err = fmt.Errorf("variable %s already exists", varname)
+		va := &AssignStmt{
+			Left:   &ident,
+			TokPos: tokPos,
+			Right:  expr,
+		}
+		if err := stmt.SetVar(va); err != nil {
+			s.err = err
 			return s.error()
 		}
-		stmt.Set[varname] = expr
 	}
 	return nil
 }
@@ -236,8 +242,11 @@ func (s *parser) parseUnaryExpr() (expr Expr, err error) {
 	s.next()
 
 	if s.except(SUB, ADD) {
-		if s.tok == SUB {
-			s.neg = true
+		switch s.tok {
+		case SUB:
+			s.sign = SUB
+		case ADD:
+			s.sign = ADD
 		}
 		s.next()
 	}
@@ -273,21 +282,19 @@ func (s *parser) parseUnaryExpr() (expr Expr, err error) {
 	case WEEKDAY, MONTH:
 		expr, err = s.parseCalendarLit()
 	}
-
 	if err == nil {
 		switch s.tok {
 		case RANGE:
 			expr, err = s.parseRangeExpr(expr)
 		}
 	}
-
-	s.neg = false
+	s.resetSign()
 	return
 }
 
 func (s *parser) parseVarExpr() (expr Expr, err error) {
 	s.next()
-	expr = &VarLit{ID: s.t.TokenText(), lpos: s.t.Offset()}
+	expr = &RefLit{ID: s.t.TokenText(), lpos: s.t.Offset()}
 	s.next()
 	return
 }
@@ -411,15 +418,6 @@ func (s *parser) parseArrayExpr() (expr Expr, err error) {
 		switch typ := expr.(type) {
 		default:
 			err = s.error()
-		case *DateTimeLit:
-			err = checkKind(arrayExpr.Kind, DATETIME)
-			arrayExpr.Kind = DATETIME
-		case *TimeLit:
-			err = checkKind(arrayExpr.Kind, TIME)
-			arrayExpr.Kind = TIME
-		case *DateLit:
-			err = checkKind(arrayExpr.Kind, DATE)
-			arrayExpr.Kind = DATE
 		case *DurationLit:
 			err = checkKind(arrayExpr.Kind, DURATION)
 			arrayExpr.Kind = DURATION
@@ -447,7 +445,7 @@ func (s *parser) parseArrayExpr() (expr Expr, err error) {
 		case *StringLit:
 			err = checkKind(arrayExpr.Kind, STRING)
 			arrayExpr.Kind = STRING
-		case *VarLit:
+		case *RefLit:
 			err = checkKind(arrayExpr.Kind, IDENT)
 			arrayExpr.Kind = IDENT
 		case *RangeExpr:
@@ -455,6 +453,15 @@ func (s *parser) parseArrayExpr() (expr Expr, err error) {
 			arrayExpr.Kind = RANGE
 		case *CalendarLit:
 			switch typ.Kind {
+			case DATE:
+				err = checkKind(arrayExpr.Kind, DATE)
+				arrayExpr.Kind = DATE
+			case TIME:
+				err = checkKind(arrayExpr.Kind, TIME)
+				arrayExpr.Kind = TIME
+			case DATETIME:
+				err = checkKind(arrayExpr.Kind, DATETIME)
+				arrayExpr.Kind = DATETIME
 			case WEEKDAY:
 				err = checkKind(arrayExpr.Kind, WEEKDAY)
 				arrayExpr.Kind = WEEKDAY
@@ -649,7 +656,7 @@ func (s *parser) parseGeometryExpr() (expr Expr, err error) {
 			continue
 		}
 		if s.except(SUB) {
-			s.neg = true
+			s.sign = SUB
 			s.next()
 		}
 
@@ -672,7 +679,7 @@ func (s *parser) parseGeometryExpr() (expr Expr, err error) {
 			return nil, s.error()
 		}
 
-		if s.neg {
+		if s.isSignMinus() {
 			val = -val
 		}
 		switch pi {
@@ -683,11 +690,11 @@ func (s *parser) parseGeometryExpr() (expr Expr, err error) {
 		default:
 			return nil, s.error()
 		}
-		s.neg = false
+		s.resetSign()
 	}
 	switch geomtyp {
 	case GEOMETRY_POINT:
-		point := &GeometryPointExpr{Val: aa, lpos: sp, rpos: s.t.Offset()}
+		point := &GeometryPointExpr{Val: aa, lpos: sp, rpos: s.t.Offset() - 1}
 		if !s.except(COLON) {
 			return point, nil
 		}
@@ -700,7 +707,7 @@ func (s *parser) parseGeometryExpr() (expr Expr, err error) {
 		point.rpos = s.t.Offset()
 		return point, nil
 	case GEOMETRY_LINE:
-		line := &GeometryLineExpr{Val: bb, lpos: sp, rpos: s.t.Offset()}
+		line := &GeometryLineExpr{Val: bb, lpos: sp, rpos: s.t.Offset() - 1}
 		if !s.except(COLON) {
 			return line, nil
 		}
@@ -713,10 +720,22 @@ func (s *parser) parseGeometryExpr() (expr Expr, err error) {
 		line.rpos = s.t.Offset()
 		return line, nil
 	case GEOMETRY_POLYGON:
-		return &GeometryPolygonExpr{Val: cc, lpos: sp, rpos: s.t.Offset()}, nil
+		return &GeometryPolygonExpr{Val: cc, lpos: sp, rpos: s.t.Offset() - 1}, nil
 	}
 	err = s.error()
 	return
+}
+
+func (s *parser) resetSign() {
+	s.sign = ILLEGAL
+}
+
+func (s *parser) isSignMinus() bool {
+	return s.sign == SUB
+}
+
+func (s *parser) isSignPlus() bool {
+	return s.sign == ADD
 }
 
 func (s *parser) parseDistance() (dist *DistanceLit, err error) {
@@ -757,7 +776,12 @@ func (s *parser) parseParenExpr() (expr Expr, err error) {
 }
 
 func (s *parser) parseStringLit() (expr Expr, err error) {
-	expr = &StringLit{Val: trim(s.t.TokenText()), lpos: s.t.Offset()}
+	text := s.t.TokenText()
+	expr = &StringLit{
+		Val:  trim(text),
+		lpos: s.t.Offset(),
+		rpos: s.t.Offset() + Pos(len(text)-1),
+	}
 	s.next()
 	return
 }
@@ -773,10 +797,13 @@ func (s *parser) parseFloatTypes() (expr Expr, err error) {
 		return nil, err
 	}
 	if expr == nil {
-		if s.neg {
+		if s.isSignMinus() {
 			val = -val
 		}
-		expr = &FloatLit{Val: val, lpos: s.lpos, rpos: s.rpos}
+		if s.isSignPlus() || s.isSignMinus() {
+			s.lpos -= 1
+		}
+		expr = &FloatLit{Val: val, lpos: s.lpos, rpos: s.t.Offset() - 1}
 	}
 	return
 }
@@ -792,15 +819,19 @@ func (s *parser) parseIntTypes() (expr Expr, err error) {
 		return nil, err
 	}
 	if expr == nil {
-		if s.neg {
+		if s.isSignMinus() {
 			intval = -intval
 		}
-		expr = &IntLit{Val: intval, lpos: s.lpos, rpos: s.rpos}
+		if s.isSignPlus() || s.isSignMinus() {
+			s.lpos -= 1
+		}
+		expr = &IntLit{Val: intval, lpos: s.lpos, rpos: s.t.Offset() - 1}
 	}
 	return
 }
 
 func (s *parser) parseDateTime(prefix string) (expr Expr, err error) {
+	lpos := s.t.Offset() - Pos(len(prefix))
 	in, err := strconv.Atoi(prefix)
 	if err != nil {
 		s.err = err
@@ -841,6 +872,7 @@ func (s *parser) parseDateTime(prefix string) (expr Expr, err error) {
 		if s.except(SUB, COLON) {
 			continue
 		}
+		s.rpos = s.t.Offset() + 1
 		val, err = strconv.Atoi(s.lit)
 		if err != nil {
 			s.err = err
@@ -876,11 +908,13 @@ func (s *parser) parseDateTime(prefix string) (expr Expr, err error) {
 		default:
 			err = s.error()
 		case 3, 2:
-			expr = &TimeLit{
-				Hour:    hour,
-				Minute:  min,
+			expr = &CalendarLit{
+				Kind:    TIME,
+				Hours:   hour,
+				Minutes: min,
 				Seconds: sec,
-				lpos:    s.t.Offset(),
+				lpos:    lpos,
+				rpos:    s.rpos,
 			}
 		}
 	case false:
@@ -888,21 +922,25 @@ func (s *parser) parseDateTime(prefix string) (expr Expr, err error) {
 		default:
 			err = s.error()
 		case 3:
-			expr = &DateLit{
+			expr = &CalendarLit{
+				Kind:  DATE,
 				Year:  year,
 				Month: month,
 				Day:   day,
-				lpos:  s.t.Offset(),
+				lpos:  lpos,
+				rpos:  s.rpos,
 			}
 		case 6:
-			expr = &DateTimeLit{
+			expr = &CalendarLit{
+				Kind:    DATETIME,
 				Year:    year,
 				Month:   month,
 				Day:     day,
 				Hours:   hour,
 				Minutes: min,
 				Seconds: sec,
-				lpos:    s.t.Offset(),
+				lpos:    lpos,
+				rpos:    s.rpos,
 			}
 		}
 	}
@@ -910,10 +948,9 @@ func (s *parser) parseDateTime(prefix string) (expr Expr, err error) {
 	if isTimeUnitPostfix(s.lit) {
 		u := unitFromString(s.lit)
 		switch typ := expr.(type) {
-		case *TimeLit:
+		case *CalendarLit:
 			typ.U = u
-		case *DateTimeLit:
-			typ.U = u
+			typ.rpos += u.size()
 		}
 		s.next()
 	}
@@ -922,35 +959,62 @@ func (s *parser) parseDateTime(prefix string) (expr Expr, err error) {
 
 func (s *parser) parseAllTypes(v float64) (expr Expr, err error) {
 	plit := s.lit
-	s.rpos = s.t.Offset()
+	s.rpos = s.t.Offset() - 1
 	s.next()
 	unit := s.t.TokenText()
+	litlen := Pos(len(plit))
 	switch {
 	case isPercentUnit(unit):
-		s.rpos += 1
+		if s.isSignMinus() {
+			s.err = errNegativeValue
+			return nil, s.error()
+		}
+		s.rpos += litlen + 1
 		expr = &PercentLit{Val: v, lpos: s.lpos, rpos: s.rpos}
 		s.next()
 	case isDateTimePrefix(unit):
+		if s.isSignMinus() {
+			s.err = errNegativeValue
+			return nil, s.error()
+		}
 		return s.parseDateTime(plit)
 	case isPressureUnit(unit):
 		u := unitFromString(s.lit)
-		expr = &PressureLit{Val: v, U: u, lpos: s.lpos, rpos: s.rpos + u.size()}
+		s.rpos += litlen + u.size()
+		expr = &PressureLit{Val: v, U: u, lpos: s.lpos, rpos: s.rpos}
 		s.next()
 	case isDistanceUnit(unit):
-		u := unitFromString(s.lit)
-		expr = &DistanceLit{Val: v, U: u, lpos: s.lpos, rpos: s.rpos + u.size()}
+		if s.isSignMinus() {
+			s.err = errNegativeValue
+			return nil, s.error()
+		}
+		u := unitFromString(unit)
+		s.rpos += litlen + u.size()
+		expr = &DistanceLit{Val: v, U: u, lpos: s.lpos, rpos: s.rpos}
 		s.next()
 	case isSpeedUnit(unit):
-		u := unitFromString(s.lit)
-		expr = &SpeedLit{Val: v, U: u, lpos: s.lpos, rpos: s.rpos + u.size()}
-		s.next()
-	case isTemperatureUnit(unit):
-		ts := Positive
-		if s.neg {
-			ts = Negative
+		if s.isSignMinus() {
+			s.err = errNegativeValue
+			return nil, s.error()
 		}
 		u := unitFromString(s.lit)
-		expr = &TemperatureLit{Val: v, U: u, Vec: ts, lpos: s.lpos, rpos: s.rpos + u.size()}
+		s.rpos += litlen + u.size()
+		expr = &SpeedLit{Val: v, U: u, lpos: s.lpos, rpos: s.rpos}
+		s.next()
+	case isTemperatureUnit(unit):
+		var ts Sign
+		if s.isSignMinus() {
+			ts = Minus
+		}
+		if s.isSignPlus() {
+			ts = Plus
+		}
+		if s.isSignPlus() || s.isSignMinus() {
+			s.lpos -= 1
+		}
+		u := unitFromString(s.lit)
+		s.rpos += litlen + u.size()
+		expr = &TemperatureLit{Val: v, U: u, Vec: ts, lpos: s.lpos, rpos: s.rpos}
 		s.next()
 	default:
 		var fr rune
@@ -959,10 +1023,15 @@ func (s *parser) parseAllTypes(v float64) (expr Expr, err error) {
 		}
 		switch fr {
 		case 'h', 'm', 's':
+			if s.isSignMinus() {
+				s.err = errNegativeValue
+				return nil, s.error()
+			}
 			dur, er := time.ParseDuration(plit + s.lit)
 			if er != nil {
 				return nil, s.error()
 			}
+			s.rpos = s.lpos + Pos(len(plit+s.lit)-1)
 			expr = &DurationLit{Val: dur, lpos: s.lpos, rpos: s.rpos}
 			s.next()
 		}
@@ -1068,13 +1137,6 @@ func (s *parser) error() error {
 
 func newParser(t *Tokenizer, r *strings.Reader) *parser {
 	return &parser{t: t, r: r}
-}
-
-func Format(stmt Statement, b *bytes.Buffer) {
-	switch typ := stmt.(type) {
-	case *TriggerStmt:
-		formatTriggerStmt(typ, b)
-	}
 }
 
 type Error struct {

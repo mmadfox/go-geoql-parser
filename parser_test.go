@@ -3,6 +3,7 @@ package geoqlparser
 import (
 	"fmt"
 	"testing"
+	"time"
 )
 
 type parserTestCase1 struct {
@@ -12,64 +13,268 @@ type parserTestCase1 struct {
 	assert func(t *TriggerStmt) (err error)
 }
 
+func TestParseRepeatAndReset(t *testing.T) {
+	testCases := []parserTestCase1{
+		{
+			name: "repeat 1 every 1s",
+			s:    `trigger when tracker_osi*tracker_miu >= 300Bar repeat 1 every 1s`,
+			assert: func(t *TriggerStmt) (err error) {
+				if err = assertDuration(t.RepeatInterval, 1*time.Second); err != nil {
+					return err
+				}
+				return assertInt(t.RepeatCount, 1)
+			},
+		},
+		{
+			name: "error: repeat 2.2",
+			s:    `trigger when tracker_osi*tracker_miu >= 300Bar repeat 2.2`,
+			err:  true,
+		},
+		{
+			name: "error: repeat 30s",
+			s:    `trigger when tracker_osi*tracker_miu >= 300Bar repeat 30s`,
+			err:  true,
+		},
+		{
+			name: "empty repeat",
+			s:    `trigger when tracker_osi*tracker_miu >= 300Bar repeat`,
+		},
+		{
+			name: "without repeat and reset",
+			s:    `trigger when tracker_osi*tracker_miu >= 300Bar`,
+			assert: func(t *TriggerStmt) (err error) {
+				if t.RepeatInterval != nil {
+					err = fmt.Errorf("got %T, expected nil TriggerStmt.RepeatInterval", t.RepeatInterval)
+				}
+				if t.RepeatCount != nil {
+					err = fmt.Errorf("got %T, expected nil TriggerStmt.RepeatCount", t.RepeatCount)
+				}
+				if t.ResetAfter != nil {
+					err = fmt.Errorf("got %T, expected nil TriggerStmt.ResetAfter", t.ResetAfter)
+				}
+				return
+			},
+		},
+		{
+			name: "reset after 24h",
+			s:    `trigger when tracker_osi*tracker_miu >= 300Bar reset after 24h`,
+			assert: func(t *TriggerStmt) (err error) {
+				if t.RepeatInterval != nil {
+					err = fmt.Errorf("got %T, expected nil TriggerStmt.RepeatInterval", t.RepeatInterval)
+				}
+				if t.RepeatCount != nil {
+					err = fmt.Errorf("got %T, expected nil TriggerStmt.RepeatCount", t.RepeatCount)
+				}
+				return assertDuration(t.ResetAfter, 24*time.Hour)
+			},
+		},
+		{
+			name: "repeat 1 reset after 24h",
+			s:    `trigger when tracker_osi*tracker_miu >= 300Bar repeat 1 reset after 24h`,
+			assert: func(t *TriggerStmt) (err error) {
+				if t.RepeatInterval != nil {
+					err = fmt.Errorf("got %T, expected nil", t.RepeatInterval)
+				}
+				if err = assertDuration(t.ResetAfter, 24*time.Hour); err != nil {
+					return err
+				}
+				return assertInt(t.RepeatCount, 1)
+			},
+		},
+		{
+			name: "repeat 1",
+			s:    `trigger when tracker_osi*tracker_miu > 300 repeat 1`,
+			assert: func(t *TriggerStmt) (err error) {
+				if t.RepeatInterval != nil {
+					err = fmt.Errorf("got %T, expected nil", t.RepeatInterval)
+				}
+				return assertInt(t.RepeatCount, 1)
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			stmt, err := Parse(tc.s)
+			if tc.err {
+				if err == nil {
+					t.Fatalf("%s: got nil, expected error", tc.name)
+				} else {
+					return
+				}
+			} else if !tc.err && err != nil {
+				t.Fatal(err)
+			}
+			trigger := stmt.(*TriggerStmt)
+			if tc.assert == nil {
+				return
+			}
+			if err := tc.assert(trigger); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
 func TestParseVars(t *testing.T) {
 	testCases := []parserTestCase1{
 		{
-			name: "assign geometry",
-			s: `trigger 
-					set
-						a = point[-1.1, 1.1];
-						b = multipoint[point[-1.1, 1.1], point[-1.1, 1.1]];
-						c = line[[1.1, 1.1], [2.1, 3.1], [3.1, 5.5], [5.5, 5.5]];
-						d = polygon[[[1.1,1.1], [1.1,1.1], [1.1,1.1]], [[1.1,1.1], [1.1,1.1], [1.1,1.1]]];
-						x = point[-1.1, 1.1]:12km;
-						u = multiline[
-								line[[1.1,1.1], [1.1,1.1], [1.1,1.1]], 
-								line[[1.1,1.1], [1.1,1.1], [1.1,1.1]]
-						];
-						o = multipolygon[
-								polygon[[[1.1,1.1], [1.1,1.1], [1.1,1.1]], [[1.1,1.1], [1.1,1.1], [1.1,1.1]]], 
-								polygon[[[1.1,1.1], [1.1,1.1], [1.1,1.1]], [[1.1,1.1], [1.1,1.1], [1.1,1.1]]]
-						];
-						m = collection[
-					        point[-1.1, 1.1],
-							multipoint[point[-1.1, 1.1], point[-1.1, 1.1]],
-							line[[1.1, 1.1], [2.1, 3.1], [3.1, 5.5], [5.5, 5.5]],
-							polygon[[[1.1,1.1], [1.1,1.1], [1.1,1.1]], [[1.1,1.1], [1.1,1.1], [1.1,1.1]]],
-							multiline[
-								line[[1.1,1.1], [1.1,1.1], [1.1,1.1]], 
-								line[[1.1,1.1], [1.1,1.1], [1.1,1.1]]
-						    ],
-							multipolygon[
-								polygon[[[1.1,1.1], [1.1,1.1], [1.1,1.1]], [[1.1,1.1], [1.1,1.1], [1.1,1.1]]], 
-								polygon[[[1.1,1.1], [1.1,1.1], [1.1,1.1]], [[1.1,1.1], [1.1,1.1], [1.1,1.1]]]
-							]
-						];
-					when 
-						@a intersects tracker_coords 
-						and @b intersects tracker_coords 
-						and @d intersects tracker_coords 
-						and @u intersects tracker_coords 
-						and @m intersects tracker_coords 
-						and @o intersects tracker_coords 
-						and @x intersects tracker_coords 
-						and @c intersects tracker_coords`,
-			assert: assertVars(),
+			name: "assign selector with args and props",
+			s:    `trigger set a=selector{"one","two"}:1km;  when @a`,
+			assert: assertVars(map[string][5]Pos{
+				"a": {12, 12, 13, 14, 38},
+			}),
 		},
 		{
-			name:   "assign int",
-			s:      `trigger set a=1; b=2; c=100; when @a > 100 and @b < 10 or @c == 300`,
-			assert: assertVars(),
+			name: "assign selector with args",
+			s:    `trigger set a=selector{"one","two"};  when @a`,
+			assert: assertVars(map[string][5]Pos{
+				"a": {12, 12, 13, 14, 34},
+			}),
 		},
 		{
-			name:   "assign float",
-			s:      `trigger set a=1.1; b=2.1; c=-100.9; when @a > 100 and @b < 10 or @c == 300`,
-			assert: assertVars(),
+			name: "assign array of range",
+			s:    `trigger set a=[1 .. 2, 5 .. 9];  when @a`,
+			assert: assertVars(map[string][5]Pos{
+				"a": {12, 12, 13, 14, 29},
+			}),
 		},
 		{
-			name:   "assign string",
-			s:      `trigger set a= "some text"; b="a"; when @a in "yes" and @b == "no"`,
-			assert: assertVars(),
+			name: "assign array of time",
+			s:    `trigger set a=[11:11:11, 10:10:10];  when @a`,
+			assert: assertVars(map[string][5]Pos{
+				"a": {12, 12, 13, 14, 33},
+			}),
+		},
+		{
+			name: "assign geometry polygon",
+			s:    `trigger set a=polygon[[[1.1,1.1], [1.1,1.1], [1.1,1.1]], [[1.1,1.1], [1.1,1.1], [1.1,1.1]]];  when @a`,
+			assert: assertVars(map[string][5]Pos{
+				"a": {12, 12, 13, 14, 90},
+			}),
+		},
+		{
+			name: "assign geometry line",
+			s:    `trigger set a=line[[1.1, 1.1], [2.1, 3.1], [3.1, 5.5], [5.5, 5.5]];  when @a`,
+			assert: assertVars(map[string][5]Pos{
+				"a": {12, 12, 13, 14, 65},
+			}),
+		},
+		{
+			name: "assign geometry point",
+			s:    `trigger set a=point[-1.1, 1.1];  when @a`,
+			assert: assertVars(map[string][5]Pos{
+				"a": {12, 12, 13, 14, 29},
+			}),
+		},
+		{
+			name: "assign duration",
+			s:    `trigger set a=7h3m45s  b=3m  when @a == @b`,
+			assert: assertVars(map[string][5]Pos{
+				"a": {12, 12, 13, 14, 20},
+				"b": {23, 23, 24, 25, 26},
+			}),
+		},
+		{
+			name: "assign negative duration",
+			s:    `trigger set a=-7h3m45s  b=3m  when @a == @b`,
+			err:  true,
+		},
+		{
+			name: "assign temperature",
+			s:    `trigger set a=+3C  b=-55F  when @a == @b`,
+			assert: assertVars(map[string][5]Pos{
+				"a": {12, 12, 13, 14, 16},
+				"b": {19, 19, 20, 21, 24},
+			}),
+		},
+		{
+			name: "assign temperature without sign",
+			s:    `trigger set a=3C  b=0F  when @a == @b`,
+			assert: assertVars(map[string][5]Pos{
+				"a": {12, 12, 13, 14, 15},
+				"b": {18, 18, 19, 20, 21},
+			}),
+		},
+		{
+			name: "assign distance",
+			s:    `trigger set a=300km  b=4M  when @a == @b`,
+			assert: assertVars(map[string][5]Pos{
+				"a": {12, 12, 13, 14, 18},
+				"b": {21, 21, 22, 23, 24},
+			}),
+		},
+		{
+			name: "assign negative distance",
+			s:    `trigger set a=-300km  b=4M  when @a == @b`,
+			err:  true,
+		},
+		{
+			name: "assign pressure",
+			s:    `trigger set a=12Bar  b=40000Psi  when @a == @b`,
+			assert: assertVars(map[string][5]Pos{
+				"a": {12, 12, 13, 14, 18},
+				"b": {21, 21, 22, 23, 30},
+			}),
+		},
+		{
+			name: "assign dateTime",
+			s:    `trigger set a=2030-10-02T11:11:11  b=2030-10-02T11:11:11  when @a == @b`,
+			assert: assertVars(map[string][5]Pos{
+				"a": {12, 12, 13, 14, 32},
+				"b": {35, 35, 36, 37, 55},
+			}),
+		},
+		{
+			name: "assign negative dateTime",
+			s:    `trigger set a=-2030-10-02T11:11:11  b=2030-10-02T11:11:11  when @a == @b`,
+			err:  true,
+		},
+		{
+			name: "assign percent",
+			s:    `trigger set aaaa=10%; b=0.1%; when @aaaa == @b`,
+			assert: assertVars(map[string][5]Pos{
+				"aaaa": {12, 15, 16, 17, 19},
+				"b":    {22, 22, 23, 24, 27},
+			}),
+		},
+		{
+			name: "assign speed",
+			s:    `trigger set aaaa=1Kph; bbbb=30Mph; when @aaaa == @bbbb`,
+			assert: assertVars(map[string][5]Pos{
+				"aaaa": {12, 15, 16, 17, 20},
+				"bbbb": {23, 26, 27, 28, 32},
+			}),
+		},
+		{
+			name: "assign negative speed",
+			s:    `trigger set aaaa=-1Kph; bbbb=-30Mph; when @aaaa == @bbbb`,
+			err:  true,
+		},
+		{
+			name: "assign string",
+			s:    `trigger set aaaa="some string"; bbbb="bbbb"; when @aaaa == @bbbb`,
+			assert: assertVars(map[string][5]Pos{
+				"aaaa": {12, 15, 16, 17, 29},
+				"bbbb": {32, 35, 36, 37, 42},
+			}),
+		},
+		{
+			name: "assign float",
+			s:    `trigger set aa=1.1; bbb=200.1; c=-3123.345768; when @aa > 100 and @bbb < 10 or @c == 300`,
+			assert: assertVars(map[string][5]Pos{
+				"aa":  {12, 13, 14, 15, 17},
+				"bbb": {20, 22, 23, 24, 28},
+				"c":   {31, 31, 32, 33, 44},
+			}),
+		},
+		{
+			name: "assign int",
+			s:    `trigger set a=1; b=2; c=-100; when @a > 100 and @b < 10 or @c == 300`,
+			assert: assertVars(map[string][5]Pos{
+				"a": {12, 12, 13, 14, 14},
+				"b": {17, 17, 18, 19, 19},
+				"c": {22, 22, 23, 24, 27},
+			}),
 		},
 		{
 			name: "assign duplicate",
@@ -102,7 +307,7 @@ func TestParseVars(t *testing.T) {
 			stmt, err := Parse(tc.s)
 			if tc.err {
 				if err == nil {
-					t.Fatalf("got nil, expected error")
+					t.Fatalf("%s: got nil, expected error", tc.name)
 				} else {
 					return
 				}
@@ -242,45 +447,6 @@ func TestParseArray(t *testing.T) {
 
 func TestParseSelector(t *testing.T) {
 	testCases := []parserTestCase1{
-		{
-			name: "start pos + end pos",
-			s:    `when selector{"one",*}:1,2,3,4 > 100 and selector2 in 1 .. 5000`,
-			assert: func(t *TriggerStmt) (err error) {
-				var found int
-				Visit(t, func(expr Expr) bool {
-					switch typ := expr.(type) {
-					case *SelectorExpr:
-						switch typ.Ident {
-						case "selector2":
-							if want, have := Pos(41), typ.Pos(); want != have {
-								err = fmt.Errorf("got %d, expected %d pos", have, want)
-								return false
-							}
-							if want, have := Pos(50), typ.End(); want != have {
-								err = fmt.Errorf("got %d, expected %d pos", have, want)
-								return false
-							}
-							found++
-						case "selector":
-							if want, have := Pos(5), typ.Pos(); want != have {
-								err = fmt.Errorf("got %d, expected %d pos", have, want)
-								return false
-							}
-							if want, have := Pos(30), typ.End(); want != have {
-								err = fmt.Errorf("got %d, expected %d pos", have, want)
-								return false
-							}
-							found++
-						}
-					}
-					return true
-				})
-				if found != 2 {
-					err = fmt.Errorf("got %d, expected 2 selector", found)
-				}
-				return
-			},
-		},
 		{
 			name: "with wildcard",
 			s:    "when selector{*}",
@@ -447,96 +613,11 @@ func TestParseSelector(t *testing.T) {
 	}
 }
 
-func TestParseTriggerStmtWhen(t *testing.T) {
-	testCases := []struct {
-		str string
-		err bool
-	}{
-		{
-			str: `
-TRIGGER
-SET
-	somepoly = polygon[[[1.1,1.1], [1.1,1.1], [1.1,1.1]], [[1.1,1.1], [1.1,1.1], [1.1,1.1]]]
-	somepoint = point[1.1,1.1]
-	somecircle = point[1.2, 3.3]:500M
-	someline  = line[[1.1,1.1], [1.1,1.1], [1.1,1.1]]
-	someline2  = line[[1.1,1.1], [1.1,1.1], [1.1,1.1]]:1km
-	somemultiline = multiline[
-        line[[1.1,1.1], [1.1,1.1], [1.1,1.1]],
-		line[[1.1,1.1], [1.1,1.1], [1.1,1.1]],
-		line[[1.1,1.1], [1.1,1.1], [1.1,1.1]],
-		line[[1.1,1.1], [1.1,1.1], [1.1,1.1]]
-	]
-	somemultipoly = multipolygon[
-	   	polygon[[[1.1,1.1], [1.1,1.1], [1.1,1.1]], [[1.1,1.1], [1.1,1.1], [1.1,1.1]]],
-		polygon[[[1.1,1.1], [1.1,1.1], [1.1,1.1]]],
-		polygon[[[1.1,1.1], [1.1,1.1], [1.1,1.1]], [[1.1,1.1], [1.1,1.1], [1.1,1.1]]]
-	]
-    somemultipoint = multipoint[
-point[1.1,1.1],
-point[1.1,1.1],
-point[1.1,1.1],
-point[1.1,1.1]:400M
-    ]
-	somecoll = collection[
-        multipoint[
-point[1.1,1.1],
-point[1.1,1.1],
-point[1.1,1.1],
-point[1.1,1.1]:400M
-    ],
-multipolygon[
-	   	polygon[[[1.1,1.1], [1.1,1.1], [1.1,1.1]], [[1.1,1.1], [1.1,1.1], [1.1,1.1]]],
-		polygon[[[1.1,1.1], [1.1,1.1], [1.1,1.1]]],
-		polygon[[[1.1,1.1], [1.1,1.1], [1.1,1.1]], [[1.1,1.1], [1.1,1.1], [1.1,1.1]]]
-	],
-multiline[
-        line[[1.1,1.1], [1.1,1.1], [1.1,1.1]],
-		line[[1.1,1.1], [1.1,1.1], [1.1,1.1]],
-		line[[1.1,1.1], [1.1,1.1], [1.1,1.1]],
-		line[[1.1,1.1], [1.1,1.1], [1.1,1.1]]
-	],
-polygon[[[1.1,1.1], [1.1,1.1], [1.1,1.1]], [[1.1,1.1], [1.1,1.1], [1.1,1.1]]],
-point[1.1,1.1],
-line[[1.1,1.1], [1.1,1.1], [1.1,1.1]],
-line[[1.1,1.1], [1.1,1.1], [1.1,1.1]]:1km
-    ]
-WHEN
-	tracker_point3 % 2 == 0
-	and tracker_cords intersects @someplace
-	and tracker_point1 / tracker_point2 * 100 > 20%
-	and tracker_week in Sun .. Fri
-	and tracker_time in 9:01AM .. 12:12PM 
-	and tracker_temperature in 12Bar .. 44Psi
-	and (tracker_speed in 10kph .. 40kph
-	or tracker_speed in [10kph .. 40kph, 10kph .. 40kph, 10kph .. 40kph])
-repeat 5 times 10s interval 
-reset after 1h 
-`,
-		},
-	}
-	// TODO:
-	for _, tc := range testCases {
-		stmt, err := Parse(tc.str)
-		if tc.err {
-			if err == nil {
-				t.Fatalf("got nil, expected error")
-			} else {
-				continue
-			}
-		} else if !tc.err && err != nil {
-			t.Fatal(err)
-		}
-		trigger := stmt.(*TriggerStmt)
-		_ = trigger
-	}
-}
-
-func assertVars() func(t *TriggerStmt) (err error) {
+func assertVars(positions map[string][5]Pos) func(t *TriggerStmt) (err error) {
 	return func(t *TriggerStmt) (err error) {
 		vars := make(map[string]struct{})
 		Visit(t, func(expr Expr) bool {
-			varlit, ok := expr.(*VarLit)
+			varlit, ok := expr.(*RefLit)
 			if !ok {
 				return true
 			}
@@ -544,17 +625,63 @@ func assertVars() func(t *TriggerStmt) (err error) {
 			return true
 		})
 		if len(vars) == 0 {
-			err = fmt.Errorf("no variables found")
+			return fmt.Errorf("no variables found")
 		}
 		for id := range vars {
-			_, ok := t.Set[id]
+			assignStmt, err := t.findVar(id)
+			if err != nil {
+				return err
+			}
+			// test positions
+			posSet, ok := positions[id]
 			if !ok {
-				err = fmt.Errorf("var %s not assigned", id)
-				return
+				return fmt.Errorf("can't find position for variable %s", id)
+			}
+			// ident left pos
+			if have, want := assignStmt.Left.Pos(), posSet[0]; have != want {
+				return fmt.Errorf("var %s: got %d, want %d AssignStmt.Left.Pos()", id, have, want)
+			}
+			// ident right pos
+			if have, want := assignStmt.Left.End(), posSet[1]; have != want {
+				return fmt.Errorf("var %s: got %d, want %d AssignStmt.Left.End()", id, have, want)
+			}
+			// assign pos
+			if have, want := assignStmt.TokPos, posSet[2]; have != want {
+				return fmt.Errorf("var %s: got %d, want %d AssignStmt.TokPos", id, have, want)
+			}
+			// right operand left pos
+			if have, want := assignStmt.Right.Pos(), posSet[3]; have != want {
+				return fmt.Errorf("var %s: got %d, want %d AssignStmt.Right.Pos()", id, have, want)
+			}
+			// right operand left end
+			if have, want := assignStmt.Right.End(), posSet[4]; have != want {
+				return fmt.Errorf("var %s: got %d, want %d AssignStmt.Right.End()", id, have, want)
 			}
 		}
 		return
 	}
+}
+
+func assertInt(expr Expr, val int) error {
+	lit, ok := expr.(*IntLit)
+	if !ok {
+		return fmt.Errorf("got %T, expected *IntLit", expr)
+	}
+	if lit.Val != val {
+		return fmt.Errorf("got %d, expected %d", lit.Val, val)
+	}
+	return nil
+}
+
+func assertDuration(expr Expr, val time.Duration) error {
+	lit, ok := expr.(*DurationLit)
+	if !ok {
+		return fmt.Errorf("got %T, expected *IntLit", expr)
+	}
+	if lit.Val != val {
+		return fmt.Errorf("got %d, expected %d", lit.Val, val)
+	}
+	return nil
 }
 
 func assertArray(kind Token, match int, totalElements int, positions [][2]Pos) func(t *TriggerStmt) (err error) {
@@ -577,12 +704,12 @@ func assertArray(kind Token, match int, totalElements int, positions [][2]Pos) f
 				item := array.List[i]
 				var ok bool
 				switch kind {
-				case WEEKDAY, MONTH:
+				case WEEKDAY, MONTH, DATE, DATETIME, TIME:
 					_, ok = item.(*CalendarLit)
 				case RANGE:
 					_, ok = item.(*RangeExpr)
 				case IDENT:
-					_, ok = item.(*VarLit)
+					_, ok = item.(*RefLit)
 				case PERCENT:
 					_, ok = item.(*PercentLit)
 				case DISTANCE:
@@ -595,12 +722,6 @@ func assertArray(kind Token, match int, totalElements int, positions [][2]Pos) f
 					_, ok = item.(*SpeedLit)
 				case DURATION:
 					_, ok = item.(*DurationLit)
-				case TIME:
-					_, ok = item.(*TimeLit)
-				case DATE:
-					_, ok = item.(*DateLit)
-				case DATETIME:
-					_, ok = item.(*DateTimeLit)
 				case STRING:
 					_, ok = item.(*StringLit)
 				case FLOAT:
