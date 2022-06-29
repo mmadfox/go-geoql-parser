@@ -122,14 +122,6 @@ func isSpeedUnit(s string) (ok bool) {
 	return
 }
 
-func isTimeUnitPostfix(s string) (ok bool) {
-	switch s {
-	case "am", "Am", "AM", "pm", "Pm", "PM":
-		ok = true
-	}
-	return
-}
-
 func unitFromString(in string) (out Unit) {
 	switch in {
 	default:

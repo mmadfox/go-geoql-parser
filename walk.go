@@ -9,13 +9,13 @@ func Walk(v Visitor, expr Expr) {
 		return
 	}
 	switch typ := expr.(type) {
-	case *SelectorExpr:
+	case *Selector:
 		if typ.Props != nil {
 			for i := 0; i < len(typ.Props); i++ {
 				Walk(v, typ.Props[i])
 			}
 		}
-	case *RangeExpr:
+	case *Range:
 		Walk(v, typ.Low)
 		Walk(v, typ.High)
 	case *ParenExpr:
@@ -23,11 +23,14 @@ func Walk(v Visitor, expr Expr) {
 	case *BinaryExpr:
 		Walk(v, typ.Left)
 		Walk(v, typ.Right)
-	case *ArrayExpr:
+	case *ArrayTyp:
 		for i := 0; i < len(typ.List); i++ {
 			Walk(v, typ.List[i])
 		}
-	case *TriggerStmt:
+	case *Assign:
+		Walk(v, typ.Left)
+		Walk(v, typ.Right)
+	case *Trigger:
 		if typ.Vars != nil {
 			for _, expr := range typ.Vars {
 				Walk(v, expr)

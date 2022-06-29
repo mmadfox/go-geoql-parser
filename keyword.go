@@ -18,7 +18,6 @@ const (
 	DATE        // 2030-10-02
 	WEEKDAY     // Mon
 	MONTH       // Jan
-	DATETIME    // 2030-10-02T11:11:11
 	DURATION    // 1h, 20s, 7h3m45s, 7h3m, 3m
 	TEMPERATURE // -30C, +30C, -40F
 	PRESSURE    // 2.2bar, 2.2psi
@@ -74,11 +73,12 @@ const (
 )
 
 var keywords = map[string]Token{
-	"trigger":        TRIGGER,
-	"set":            SET,
-	"when":           WHEN,
-	"repeat":         REPEAT,
-	"reset":          RESET,
+	"trigger": TRIGGER,
+	"set":     SET,
+	"when":    WHEN,
+	"repeat":  REPEAT,
+	"reset":   RESET,
+
 	"=":              ASSIGN,
 	";":              SEMICOLON,
 	"(":              LPAREN,
@@ -114,21 +114,10 @@ var keywords = map[string]Token{
 	"intersects":     INTERSECTS,
 	"not intersects": NOT_INTERSECTS,
 
-	"TINT":      INT,
-	"TFLOAT":    FLOAT,
-	"TSTRING":   STRING,
-	"TDATETIME": DATETIME,
-	"TDATE":     DATE,
-	"TTIME":     TIME,
-	"TDURATION": DURATION,
-	"TSPEED":    SPEED,
-	"TPRESSURE": PRESSURE,
-	"TDISTANCE": DISTANCE,
-	"TPERCENT":  PERCENT,
-	"TVAR":      IDENT,
-	"TRANGE":    RANGE,
-	"TWEEKDAY":  WEEKDAY,
-	"TMONTH":    MONTH,
+	"time":    TIME,
+	"date":    DATE,
+	"weekday": WEEKDAY,
+	"month":   MONTH,
 }
 
 var keywordStrings = map[Token]string{}

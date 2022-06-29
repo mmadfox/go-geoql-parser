@@ -3,7 +3,6 @@ package geoqlparser
 import (
 	"fmt"
 	"io"
-	"strconv"
 	"time"
 )
 
@@ -19,11 +18,11 @@ type Expr interface {
 	isExpr()
 }
 
-func (t *TriggerStmt) isStatement() {}
+func (t *Trigger) isStatement() {}
 
-// TriggerStmt represents a TRIGGER statement.
-type TriggerStmt struct {
-	Vars           []*AssignStmt
+// Trigger represents a TRIGGER statement.
+type Trigger struct {
+	Vars           []*Assign
 	When           Expr
 	RepeatCount    Expr
 	RepeatInterval Expr
@@ -32,7 +31,7 @@ type TriggerStmt struct {
 	rpos           Pos
 }
 
-func (t *TriggerStmt) SetVar(v *AssignStmt) error {
+func (t *Trigger) SetVar(v *Assign) error {
 	if t.isAssigned(v.Left.Val) {
 		return fmt.Errorf("variable %s already assigned", v.Left.Val)
 	}
@@ -40,7 +39,7 @@ func (t *TriggerStmt) SetVar(v *AssignStmt) error {
 	return nil
 }
 
-func (t *TriggerStmt) isAssigned(varname string) bool {
+func (t *Trigger) isAssigned(varname string) bool {
 	for i := 0; i < len(t.Vars); i++ {
 		if t.Vars[i].Left.Val == varname {
 			return true
@@ -49,14 +48,15 @@ func (t *TriggerStmt) isAssigned(varname string) bool {
 	return false
 }
 
-func (t *TriggerStmt) initVars() {
+func (t *Trigger) initVars() {
 	if t.Vars != nil {
 		return
 	}
-	t.Vars = make([]*AssignStmt, 0)
+	t.Vars = make([]*Assign, 0)
 }
 
-func (t *TriggerStmt) findVar(varname string) (*AssignStmt, error) {
+func (t *Trigger) findVar(varname string) (*Assign, error) {
+	// TODO: if the vars has more than 16 elements, then binary search
 	for i := 0; i < len(t.Vars); i++ {
 		if t.Vars[i].Left.Val == varname {
 			return t.Vars[i], nil
@@ -65,13 +65,13 @@ func (t *TriggerStmt) findVar(varname string) (*AssignStmt, error) {
 	return nil, fmt.Errorf("variable %s not found", varname)
 }
 
-type AssignStmt struct {
-	Left   *IdentLit
+type Assign struct {
+	Left   *Ident
 	Right  Expr
 	TokPos Pos
 }
 
-type ArrayExpr struct {
+type ArrayTyp struct {
 	Kind Token
 	List []Expr
 	lpos Pos
@@ -91,76 +91,67 @@ type ParenExpr struct {
 	rpos Pos
 }
 
-type WildcardLit struct {
+type WildcardTyp struct {
 	lpos Pos
 }
 
-type CalendarLit struct {
-	Kind                                    Token
-	Year, Day, Hours, Minutes, Seconds, Val int
-	Month                                   time.Month
-	U                                       Unit
-	lpos                                    Pos
-	rpos                                    Pos
+type TimeTyp struct {
+	Hours, Minutes, Seconds int
+	U                       Unit
+	lpos                    Pos
+	rpos                    Pos
 }
 
-var shortDayNames = []string{
-	"Sun",
-	"Mon",
-	"Tue",
-	"Wed",
-	"Thu",
-	"Fri",
-	"Sat",
+type DateTyp struct {
+	Year, Day, Month int
+	lpos             Pos
+	rpos             Pos
 }
 
-var shortMonthNames = []string{
-	"Jan",
-	"Feb",
-	"Mar",
-	"Apr",
-	"May",
-	"Jun",
-	"Jul",
-	"Aug",
-	"Sep",
-	"Oct",
-	"Nov",
-	"Dec",
+type WeekdayTyp struct {
+	Val  int
+	lpos Pos
+	rpos Pos
 }
 
-type GeometryPointExpr struct {
+type MonthTyp struct {
+	Val  int
+	lpos Pos
+	rpos Pos
+}
+
+type GeometryPointTyp struct {
 	Val    [2]float64
-	Radius *DistanceLit
+	Radius *DistanceTyp
 	lpos   Pos
 	rpos   Pos
 }
 
-type GeometryMultiObject struct {
+type GeometryMultiObjectTyp struct {
 	Kind Token
 	Val  []Expr
 	lpos Pos
 	rpos Pos
 }
 
-type GeometryLineExpr struct {
+type GeometryLineTyp struct {
 	Val    [][2]float64
-	Margin *DistanceLit
+	Margin *DistanceTyp
 	lpos   Pos
 	rpos   Pos
 }
 
-func (e *GeometryLineExpr) needExpand() bool {
+func (e *GeometryLineTyp) needExpand() bool {
 	return len(e.Val) > 4
 }
 
-type GeometryPolygonExpr struct {
+type GeometryPolygonTyp struct {
 	Val  [][][2]float64
 	lpos Pos
 	rpos Pos
 }
 
-func (e *GeometryPolygonExpr) needExpand() (ok bool) {
+func (e *GeometryPolygonTyp) needExpand() (ok bool) {
 	for i := 0; i < len(e.Val); i++ {
 		if len(e.Val[i]) > 4 {
 			ok = true
@@ -170,58 +161,54 @@ func (e *GeometryPolygonExpr) needExpand() (ok bool) {
 	return
 }
 
-func (e *GeometryPolygonExpr) HasHoles() bool {
+func (e *GeometryPolygonTyp) HasHoles() bool {
 	return len(e.Val) > 1
 }
 
-type GeometryCollectionExpr struct {
+type GeometryCollectionTyp struct {
 	Objects []Expr
 	lpos    Pos
 	rpos    Pos
 }
 
-type IntLit struct {
+type IntTyp struct {
 	Val  int
 	lpos Pos
 	rpos Pos
 }
 
-func (e *IntLit) format(b io.StringWriter, padding string, inline bool) {
-	b.WriteString(strconv.Itoa(e.Val))
-}
-
-type RangeExpr struct {
+type Range struct {
 	Low  Expr
 	High Expr
 	lpos Pos
 	rpos Pos
 }
 
-type PercentLit struct {
+type PercentTyp struct {
 	Val  float64
 	lpos Pos
 	rpos Pos
 }
 
-type StringLit struct {
+type StringTyp struct {
 	Val  string
 	lpos Pos
 	rpos Pos
 }
 
-type FloatLit struct {
+type FloatTyp struct {
 	Val  float64
 	lpos Pos
 	rpos Pos
 }
 
-type DurationLit struct {
+type DurationTyp struct {
 	Val  time.Duration
 	lpos Pos
 	rpos Pos
 }
 
-type TemperatureLit struct {
+type TemperatureTyp struct {
 	Val  float64
 	U    Unit
 	Vec  Sign
@@ -229,48 +216,40 @@ type TemperatureLit struct {
 	rpos Pos
 }
 
-type PressureLit struct {
+type PressureTyp struct {
 	Val  float64
 	U    Unit
 	lpos Pos
 	rpos Pos
 }
 
-type DistanceLit struct {
+type DistanceTyp struct {
 	Val  float64
 	U    Unit
 	lpos Pos
 	rpos Pos
 }
 
-type SpeedLit struct {
+type SpeedTyp struct {
 	Val  float64
 	U    Unit
 	lpos Pos
 	rpos Pos
 }
 
-type IdentLit struct {
+type Ident struct {
 	Val  string
 	lpos Pos
 	rpos Pos
 }
 
-func dt2str(v int) string {
-	s := strconv.Itoa(v)
-	if v < 10 {
-		return "0" + s
-	}
-	return s
-}
-
-type RefLit struct {
+type Ref struct {
 	ID   string
 	lpos Pos
 	rpos Pos
 }
 
-type SelectorExpr struct {
+type Selector struct {
 	Ident    string              // selector name
 	Args     map[string]struct{} // device ids
 	Wildcard bool                // indicates the current device
@@ -279,7 +258,7 @@ type SelectorExpr struct {
 	rpos     Pos
 }
 
-func (e *SelectorExpr) calculateEnd(p Pos) {
+func (e *Selector) calculateEnd(p Pos) {
 	if len(e.Props) > 0 {
 		e.rpos = e.Props[len(e.Props)-1].End()
 	} else {
@@ -290,7 +269,7 @@ func (e *SelectorExpr) calculateEnd(p Pos) {
 	}
 }
 
-func (e *SelectorExpr) needExpand() (ok bool) {
+func (e *Selector) needExpand() (ok bool) {
 	var n int
 	var i int
 	for k := range e.Args {
@@ -307,13 +286,13 @@ func (e *SelectorExpr) needExpand() (ok bool) {
 	return
 }
 
-type BooleanLit struct {
+type BooleanTyp struct {
 	Val  bool
 	lpos Pos
 	rpos Pos
 }
 
-func (e *BooleanLit) format(b io.StringWriter, padding string, inline bool) {
+func (e *BooleanTyp) format(b io.StringWriter, padding string, inline bool) {
 	switch e.Val {
 	case true:
 		b.WriteString("true")
@@ -325,80 +304,89 @@ func (e *BooleanLit) format(b io.StringWriter, padding string, inline bool) {
 
 func (e *BinaryExpr) isExpr()             {}
 func (e *ParenExpr) isExpr()              {}
-func (e *SelectorExpr) isExpr()           {}
-func (e *WildcardLit) isExpr()            {}
-func (e *BooleanLit) isExpr()             {}
-func (e *SpeedLit) isExpr()               {}
-func (e *IntLit) isExpr()                 {}
-func (e *FloatLit) isExpr()               {}
-func (e *DurationLit) isExpr()            {}
-func (e *DistanceLit) isExpr()            {}
-func (e *TemperatureLit) isExpr()         {}
-func (e *PressureLit) isExpr()            {}
-func (e *GeometryPointExpr) isExpr()      {}
-func (e *GeometryLineExpr) isExpr()       {}
-func (e *GeometryPolygonExpr) isExpr()    {}
-func (e *GeometryMultiObject) isExpr()    {}
-func (e *GeometryCollectionExpr) isExpr() {}
-func (e *ArrayExpr) isExpr()              {}
-func (e *StringLit) isExpr()              {}
-func (e *PercentLit) isExpr()             {}
-func (e *RefLit) isExpr()                 {}
-func (e *RangeExpr) isExpr()              {}
-func (e *CalendarLit) isExpr()            {}
-func (t *TriggerStmt) isExpr()            {}
-func (e *IdentLit) isExpr()               {}
-func (e *AssignStmt) isExpr()             {}
+func (e *Selector) isExpr()               {}
+func (e *WildcardTyp) isExpr()            {}
+func (e *BooleanTyp) isExpr()             {}
+func (e *SpeedTyp) isExpr()               {}
+func (e *IntTyp) isExpr()                 {}
+func (e *FloatTyp) isExpr()               {}
+func (e *DurationTyp) isExpr()            {}
+func (e *DistanceTyp) isExpr()            {}
+func (e *TemperatureTyp) isExpr()         {}
+func (e *PressureTyp) isExpr()            {}
+func (e *GeometryPointTyp) isExpr()       {}
+func (e *GeometryLineTyp) isExpr()        {}
+func (e *GeometryPolygonTyp) isExpr()     {}
+func (e *GeometryMultiObjectTyp) isExpr() {}
+func (e *GeometryCollectionTyp) isExpr()  {}
+func (e *ArrayTyp) isExpr()               {}
+func (e *StringTyp) isExpr()              {}
+func (e *PercentTyp) isExpr()             {}
+func (e *Ref) isExpr()                    {}
+func (e *Range) isExpr()                  {}
+func (t *Trigger) isExpr()                {}
+func (e *Ident) isExpr()                  {}
+func (e *Assign) isExpr()                 {}
+func (e *DateTyp) isExpr()                {}
+func (e *TimeTyp) isExpr()                {}
+func (e *WeekdayTyp) isExpr()             {}
+func (e *MonthTyp) isExpr()               {}
 
 func (e *BinaryExpr) Pos() Pos             { return e.Left.Pos() }
 func (e *BinaryExpr) End() Pos             { return e.Right.Pos() }
 func (e *ParenExpr) Pos() Pos              { return e.lpos }
 func (e *ParenExpr) End() Pos              { return e.Expr.End() }
-func (e *SelectorExpr) Pos() Pos           { return e.lpos }
-func (e *SelectorExpr) End() Pos           { return e.rpos }
-func (e *WildcardLit) Pos() Pos            { return e.lpos }
-func (e *WildcardLit) End() Pos            { return e.lpos + 1 }
-func (e *BooleanLit) Pos() Pos             { return e.lpos }
-func (e *BooleanLit) End() Pos             { return e.rpos }
-func (e *SpeedLit) Pos() Pos               { return e.lpos }
-func (e *SpeedLit) End() Pos               { return e.rpos }
-func (e *IntLit) Pos() Pos                 { return e.lpos }
-func (e *IntLit) End() Pos                 { return e.rpos }
-func (e *FloatLit) Pos() Pos               { return e.lpos }
-func (e *FloatLit) End() Pos               { return e.rpos }
-func (e *DurationLit) Pos() Pos            { return e.lpos }
-func (e *DurationLit) End() Pos            { return e.rpos }
-func (e *DistanceLit) Pos() Pos            { return e.lpos }
-func (e *DistanceLit) End() Pos            { return e.rpos }
-func (e *TemperatureLit) Pos() Pos         { return e.lpos }
-func (e *TemperatureLit) End() Pos         { return e.rpos }
-func (e *PressureLit) Pos() Pos            { return e.lpos }
-func (e *PressureLit) End() Pos            { return e.rpos }
-func (e *GeometryPointExpr) Pos() Pos      { return e.lpos }
-func (e *GeometryPointExpr) End() Pos      { return e.rpos }
-func (e *GeometryLineExpr) Pos() Pos       { return e.lpos }
-func (e *GeometryLineExpr) End() Pos       { return e.rpos }
-func (e *GeometryPolygonExpr) Pos() Pos    { return e.lpos }
-func (e *GeometryPolygonExpr) End() Pos    { return e.rpos }
-func (e *GeometryMultiObject) Pos() Pos    { return e.lpos }
-func (e *GeometryMultiObject) End() Pos    { return e.rpos }
-func (e *GeometryCollectionExpr) Pos() Pos { return e.lpos }
-func (e *GeometryCollectionExpr) End() Pos { return e.rpos }
-func (e *ArrayExpr) Pos() Pos              { return e.lpos }
-func (e *ArrayExpr) End() Pos              { return e.rpos }
-func (e *StringLit) Pos() Pos              { return e.lpos }
-func (e *StringLit) End() Pos              { return e.rpos }
-func (e *PercentLit) Pos() Pos             { return e.lpos }
-func (e *PercentLit) End() Pos             { return e.rpos }
-func (e *RefLit) Pos() Pos                 { return e.lpos }
-func (e *RefLit) End() Pos                 { return e.rpos }
-func (e *RangeExpr) Pos() Pos              { return e.lpos }
-func (e *RangeExpr) End() Pos              { return e.rpos }
-func (e *CalendarLit) Pos() Pos            { return e.lpos }
-func (e *CalendarLit) End() Pos            { return e.rpos }
-func (t *TriggerStmt) Pos() Pos            { return t.lpos }
-func (t *TriggerStmt) End() Pos            { return t.rpos }
-func (e *IdentLit) Pos() Pos               { return e.lpos }
-func (e *IdentLit) End() Pos               { return e.rpos }
-func (e *AssignStmt) Pos() Pos             { return e.Left.Pos() }
-func (e *AssignStmt) End() Pos             { return e.Right.End() }
+func (e *Selector) Pos() Pos               { return e.lpos }
+func (e *Selector) End() Pos               { return e.rpos }
+func (e *WildcardTyp) Pos() Pos            { return e.lpos }
+func (e *WildcardTyp) End() Pos            { return e.lpos + 1 }
+func (e *BooleanTyp) Pos() Pos             { return e.lpos }
+func (e *BooleanTyp) End() Pos             { return e.rpos }
+func (e *SpeedTyp) Pos() Pos               { return e.lpos }
+func (e *SpeedTyp) End() Pos               { return e.rpos }
+func (e *IntTyp) Pos() Pos                 { return e.lpos }
+func (e *IntTyp) End() Pos                 { return e.rpos }
+func (e *FloatTyp) Pos() Pos               { return e.lpos }
+func (e *FloatTyp) End() Pos               { return e.rpos }
+func (e *DurationTyp) Pos() Pos            { return e.lpos }
+func (e *DurationTyp) End() Pos            { return e.rpos }
+func (e *DistanceTyp) Pos() Pos            { return e.lpos }
+func (e *DistanceTyp) End() Pos            { return e.rpos }
+func (e *TemperatureTyp) Pos() Pos         { return e.lpos }
+func (e *TemperatureTyp) End() Pos         { return e.rpos }
+func (e *PressureTyp) Pos() Pos            { return e.lpos }
+func (e *PressureTyp) End() Pos            { return e.rpos }
+func (e *GeometryPointTyp) Pos() Pos       { return e.lpos }
+func (e *GeometryPointTyp) End() Pos       { return e.rpos }
+func (e *GeometryLineTyp) Pos() Pos        { return e.lpos }
+func (e *GeometryLineTyp) End() Pos        { return e.rpos }
+func (e *GeometryPolygonTyp) Pos() Pos     { return e.lpos }
+func (e *GeometryPolygonTyp) End() Pos     { return e.rpos }
+func (e *GeometryMultiObjectTyp) Pos() Pos { return e.lpos }
+func (e *GeometryMultiObjectTyp) End() Pos { return e.rpos }
+func (e *GeometryCollectionTyp) Pos() Pos  { return e.lpos }
+func (e *GeometryCollectionTyp) End() Pos  { return e.rpos }
+func (e *ArrayTyp) Pos() Pos               { return e.lpos }
+func (e *ArrayTyp) End() Pos               { return e.rpos }
+func (e *StringTyp) Pos() Pos              { return e.lpos }
+func (e *StringTyp) End() Pos              { return e.rpos }
+func (e *PercentTyp) Pos() Pos             { return e.lpos }
+func (e *PercentTyp) End() Pos             { return e.rpos }
+func (e *Ref) Pos() Pos                    { return e.lpos }
+func (e *Ref) End() Pos                    { return e.rpos }
+func (e *Range) Pos() Pos                  { return e.lpos }
+func (e *Range) End() Pos                  { return e.rpos }
+func (t *Trigger) Pos() Pos                { return t.lpos }
+func (t *Trigger) End() Pos                { return t.rpos }
+func (e *Ident) Pos() Pos                  { return e.lpos }
+func (e *Ident) End() Pos                  { return e.rpos }
+func (e *Assign) Pos() Pos                 { return e.Left.Pos() }
+func (e *Assign) End() Pos                 { return e.Right.End() }
+func (e *DateTyp) Pos() Pos                { return e.lpos }
+func (e *DateTyp) End() Pos                { return e.rpos }
+func (e *TimeTyp) Pos() Pos                { return e.lpos }
+func (e *TimeTyp) End() Pos                { return e.rpos }
+func (e *WeekdayTyp) Pos() Pos             { return e.lpos }
+func (e *WeekdayTyp) End() Pos             { return e.rpos }
+func (e *MonthTyp) Pos() Pos               { return e.lpos }
+func (e *MonthTyp) End() Pos               { return e.rpos }

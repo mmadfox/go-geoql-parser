@@ -15,7 +15,7 @@ func Format(w io.StringWriter, stmt Statement) error {
 	switch typ := stmt.(type) {
 	default:
 		return fmt.Errorf("todo")
-	case *TriggerStmt:
+	case *Trigger:
 		return formatTriggerStmt(typ, w)
 	}
 }
@@ -30,7 +30,7 @@ func writeNewLine(w io.StringWriter) {
 	checkError(w.WriteString(nl))
 }
 
-func formatTriggerStmt(t *TriggerStmt, w io.StringWriter) (err error) {
+func formatTriggerStmt(t *Trigger, w io.StringWriter) (err error) {
 	defer func() {
 		if er := recover(); er != nil {
 			err = er.(error)
@@ -72,13 +72,13 @@ func formatTriggerStmt(t *TriggerStmt, w io.StringWriter) (err error) {
 	return
 }
 
-func (t *TriggerStmt) format(_ io.StringWriter, _ string, _ bool) {}
+func (t *Trigger) format(_ io.StringWriter, _ string, _ bool) {}
 
 func formatFloat(w io.StringWriter, v float64) {
 	checkError(w.WriteString(strconv.FormatFloat(v, 'f', -1, 64)))
 }
 
-func (e *GeometryMultiObject) format(w io.StringWriter, padding string, inline bool) {
+func (e *GeometryMultiObjectTyp) format(w io.StringWriter, padding string, inline bool) {
 	switch e.Kind {
 	case GEOMETRY_MULTIPOINT:
 		checkError(w.WriteString("multipoint["))
@@ -100,7 +100,7 @@ func (e *GeometryMultiObject) format(w io.StringWriter, padding string, inline b
 	checkError(w.WriteString("]"))
 }
 
-func (e *GeometryLineExpr) format(w io.StringWriter, padding string, inline bool) {
+func (e *GeometryLineTyp) format(w io.StringWriter, padding string, inline bool) {
 	needExpand := e.needExpand()
 	checkError(w.WriteString("line["))
 	pad2 := padding + padding
@@ -141,7 +141,7 @@ func (e *GeometryLineExpr) format(w io.StringWriter, padding string, inline bool
 	}
 }
 
-func (e *GeometryPolygonExpr) format(w io.StringWriter, padding string, inline bool) {
+func (e *GeometryPolygonTyp) format(w io.StringWriter, padding string, inline bool) {
 	needExpand := e.needExpand()
 	checkError(w.WriteString("polygon["))
 	pad2 := padding + padding
@@ -190,7 +190,7 @@ func (e *GeometryPolygonExpr) format(w io.StringWriter, padding string, inline b
 	checkError(w.WriteString("]"))
 }
 
-func (e *GeometryCollectionExpr) format(w io.StringWriter, padding string, inline bool) {
+func (e *GeometryCollectionTyp) format(w io.StringWriter, padding string, inline bool) {
 	checkError(w.WriteString("collection["))
 	for i := 0; i < len(e.Objects); i++ {
 		if !inline {
@@ -205,32 +205,32 @@ func (e *GeometryCollectionExpr) format(w io.StringWriter, padding string, inlin
 	checkError(w.WriteString("]"))
 }
 
-func (e *RangeExpr) format(w io.StringWriter, padding string, inline bool) {
+func (e *Range) format(w io.StringWriter, padding string, inline bool) {
 	e.Low.format(w, padding, inline)
 	checkError(w.WriteString(" ... "))
 	e.High.format(w, padding, inline)
 }
 
-func (e *PercentLit) format(w io.StringWriter, _ string, _ bool) {
+func (e *PercentTyp) format(w io.StringWriter, _ string, _ bool) {
 	formatFloat(w, e.Val)
 	checkError(w.WriteString("%"))
 }
 
-func (e *StringLit) format(w io.StringWriter, _ string, _ bool) {
+func (e *StringTyp) format(w io.StringWriter, _ string, _ bool) {
 	checkError(w.WriteString(`"`))
 	checkError(w.WriteString(e.Val))
 	checkError(w.WriteString(`"`))
 }
 
-func (e *FloatLit) format(w io.StringWriter, _ string, _ bool) {
+func (e *FloatTyp) format(w io.StringWriter, _ string, _ bool) {
 	formatFloat(w, e.Val)
 }
 
-func (e *DurationLit) format(b io.StringWriter, _ string, _ bool) {
+func (e *DurationTyp) format(b io.StringWriter, _ string, _ bool) {
 	checkError(b.WriteString(e.Val.String()))
 }
 
-func (e *TemperatureLit) format(w io.StringWriter, _ string, _ bool) {
+func (e *TemperatureTyp) format(w io.StringWriter, _ string, _ bool) {
 	switch e.Vec {
 	case Plus:
 		checkError(w.WriteString("+"))
@@ -241,22 +241,22 @@ func (e *TemperatureLit) format(w io.StringWriter, _ string, _ bool) {
 	checkError(w.WriteString(e.U.String()))
 }
 
-func (e *PressureLit) format(w io.StringWriter, _ string, _ bool) {
+func (e *PressureTyp) format(w io.StringWriter, _ string, _ bool) {
 	formatFloat(w, e.Val)
 	checkError(w.WriteString(e.U.String()))
 }
 
-func (e *DistanceLit) format(w io.StringWriter, _ string, _ bool) {
+func (e *DistanceTyp) format(w io.StringWriter, _ string, _ bool) {
 	formatFloat(w, e.Val)
 	checkError(w.WriteString(e.U.String()))
 }
 
-func (e *SpeedLit) format(w io.StringWriter, _ string, _ bool) {
+func (e *SpeedTyp) format(w io.StringWriter, _ string, _ bool) {
 	formatFloat(w, e.Val)
 	checkError(w.WriteString(e.U.String()))
 }
 
-func (e *SelectorExpr) format(b io.StringWriter, padding string, inline bool) {
+func (e *Selector) format(b io.StringWriter, padding string, inline bool) {
 	checkError(b.WriteString(e.Ident))
 	if len(e.Args) > 0 {
 		checkError(b.WriteString("{"))
@@ -301,7 +301,7 @@ func (e *SelectorExpr) format(b io.StringWriter, padding string, inline bool) {
 	}
 }
 
-func (e *GeometryPointExpr) format(w io.StringWriter, padding string, inline bool) {
+func (e *GeometryPointTyp) format(w io.StringWriter, padding string, inline bool) {
 	checkError(w.WriteString("point["))
 	formatFloat(w, e.Val[0])
 	checkError(w.WriteString(", "))
@@ -313,7 +313,7 @@ func (e *GeometryPointExpr) format(w io.StringWriter, padding string, inline boo
 	}
 }
 
-func (e *ArrayExpr) format(b io.StringWriter, padding string, inline bool) {
+func (e *ArrayTyp) format(b io.StringWriter, padding string, inline bool) {
 	checkError(b.WriteString("["))
 	for i, expr := range e.List {
 		expr.format(b, padding, inline)
@@ -370,7 +370,7 @@ func (e *ParenExpr) format(w io.StringWriter, padding string, inline bool) {
 	checkError(w.WriteString(")"))
 }
 
-func (e *AssignStmt) format(w io.StringWriter, padding string, inline bool) {
+func (e *Assign) format(w io.StringWriter, padding string, inline bool) {
 	checkError(w.WriteString(padding))
 	e.Left.format(w, padding, inline)
 	checkError(w.WriteString(" = "))
@@ -378,63 +378,57 @@ func (e *AssignStmt) format(w io.StringWriter, padding string, inline bool) {
 	checkError(w.WriteString(";"))
 }
 
-func (e *IdentLit) format(w io.StringWriter, _ string, _ bool) {
+func (e *Ident) format(w io.StringWriter, _ string, _ bool) {
 	checkError(w.WriteString(e.Val))
 }
 
-func (e *WildcardLit) format(b io.StringWriter, _ string, _ bool) {
+func (e *WildcardTyp) format(b io.StringWriter, _ string, _ bool) {
 	checkError(b.WriteString("*"))
 }
 
-func (e *CalendarLit) format(b io.StringWriter, padding string, inline bool) {
-	switch e.Kind {
-	case DATETIME:
-		checkError(b.WriteString(strconv.Itoa(e.Year)))
-		checkError(b.WriteString("-"))
-		checkError(b.WriteString(dt2str(int(e.Month))))
-		checkError(b.WriteString("-"))
-		checkError(b.WriteString(dt2str(e.Day)))
-		checkError(b.WriteString("T"))
-		switch e.U {
-		case AM, PM:
-			checkError(b.WriteString(strconv.Itoa(e.Hours) + ":" + dt2str(e.Minutes)))
-			if e.Seconds > 0 {
-				checkError(b.WriteString(":" + dt2str(e.Seconds)))
-			}
-			checkError(b.WriteString(e.U.String()))
-		default:
-			checkError(b.WriteString(dt2str(e.Hours) + ":" + dt2str(e.Minutes)))
-			if e.Seconds > 0 {
-				checkError(b.WriteString(":" + dt2str(e.Seconds)))
-			}
-		}
-	case DATE:
-		checkError(b.WriteString(strconv.Itoa(e.Year)))
-		checkError(b.WriteString("-"))
-		checkError(b.WriteString(dt2str(int(e.Month))))
-		checkError(b.WriteString("-"))
-		checkError(b.WriteString(dt2str(e.Day)))
-	case TIME:
-		switch e.U {
-		case AM, PM:
-			checkError(b.WriteString(strconv.Itoa(e.Hours) + ":" + dt2str(e.Minutes)))
-			if e.Seconds > 0 {
-				checkError(b.WriteString(":" + dt2str(e.Seconds)))
-			}
-			checkError(b.WriteString(e.U.String()))
-		default:
-			checkError(b.WriteString(dt2str(e.Hours) + ":" + dt2str(e.Minutes)))
-			if e.Seconds > 0 {
-				checkError(b.WriteString(":" + dt2str(e.Seconds)))
-			}
-		}
-	case WEEKDAY:
-		checkError(b.WriteString(shortDayNames[e.Val]))
-	case MONTH:
-		checkError(b.WriteString(shortMonthNames[e.Val]))
-	}
+var shortDayNames = []string{
+	"Sun",
+	"Mon",
+	"Tue",
+	"Wed",
+	"Thu",
+	"Fri",
+	"Sat",
 }
 
-func (e *RefLit) format(w io.StringWriter, _ string, _ bool) {
+var shortMonthNames = []string{
+	"Jan",
+	"Feb",
+	"Mar",
+	"Apr",
+	"May",
+	"Jun",
+	"Jul",
+	"Aug",
+	"Sep",
+	"Oct",
+	"Nov",
+	"Dec",
+}
+
+func (e *Ref) format(w io.StringWriter, _ string, _ bool) {
 	checkError(w.WriteString("@" + e.ID))
+}
+
+func (e *IntTyp) format(w io.StringWriter, _ string, _ bool) {
+	checkError(w.WriteString(strconv.Itoa(e.Val)))
+}
+
+func (e *DateTyp) format(w io.StringWriter, _ string, _ bool) {
+}
+
+func (e *TimeTyp) format(w io.StringWriter, _ string, _ bool) {
+}
+
+func (e *WeekdayTyp) format(w io.StringWriter, _ string, _ bool) {
+
+}
+
+func (e *MonthTyp) format(w io.StringWriter, _ string, _ bool) {
+
 }
