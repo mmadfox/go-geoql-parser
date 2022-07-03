@@ -55,8 +55,7 @@ func (t *Trigger) initVars() {
 	t.Vars = make([]*Assign, 0)
 }
 
-func (t *Trigger) findVar(varname string) (*Assign, error) {
-	// TODO: if the vars has more than 16 elements, then binary search
+func (t *Trigger) findAssign(varname string) (*Assign, error) {
 	for i := 0; i < len(t.Vars); i++ {
 		if t.Vars[i].Left.Val == varname {
 			return t.Vars[i], nil

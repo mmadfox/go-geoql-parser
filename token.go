@@ -122,8 +122,6 @@ func (t *Tokenizer) Scan() (tok Token, lit string) {
 		tok = SUB
 	case '*':
 		tok = MUL
-	case '%':
-		tok = REM
 	case '!':
 		nr, _ := t.next()
 		switch nr {
@@ -162,6 +160,9 @@ func (t *Tokenizer) Scan() (tok Token, lit string) {
 			found bool
 		)
 		switch lit {
+		case "mod":
+			found = true
+			kwd = REM
 		case "point":
 			found = true
 			kwd = GEOMETRY_POINT
@@ -215,7 +216,7 @@ func (op Token) Precedence() (n int) {
 		n = 1
 	case AND:
 		n = 2
-	case LSS, LEQ, GTR, GEQ, EQL, LEQL, INTERSECTS, NOT_INTERSECTS,
+	case LSS, LEQ, GTR, GEQ, EQL, LEQL, LNEQ, INTERSECTS, NOT_INTERSECTS,
 		IN, NOT_IN, NEARBY, NOT_NEARBY, NOT_EQ:
 		n = 3
 	case ADD, SUB:

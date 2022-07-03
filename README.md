@@ -75,7 +75,7 @@ RESET after 1h
 | SUB            | 4          | -              |
 | MUL            | 5          | *              |
 | QUO            | 5          | /              |
-| REM            | 5          | %              |
+| REM            | 5          | rem            |
 
 # Data Types
 | Data type            | Example                                                                                 |
@@ -111,10 +111,6 @@ RESET after 1h
 
 ## Selector
 This data type is used to match values from INPUT data.
-
-```go
- *geoqlparser.SelectorExpr
-```
 
 - valid characters: *a-zA-Z_0-9*
 - min length: *1*
@@ -159,9 +155,7 @@ h3Index:1,2        // same as calculating index h3 with levels 1 and 2
 
 ## Wildcard
 This data type is used to indicate the current device
-```go
-*geoqlparser.WildcardLit
-```
+
 Example:
 ```text
 selector{*}
@@ -169,9 +163,7 @@ someSelector{*, "786d9e27-f277-4d5d-b658-3198c133c43d"}
 ```
 ## Boolean
 This data type is used to describe the boolean value TRUE or FALSE
-```go
-*geoqlparser.BooleanLit
-```
+
 Example:
 ```text
 tracker_status eq true
@@ -181,9 +173,7 @@ tracker_status == false
 ```
 ## Speed
 This data type is used to describe the SPEED value 
-```go
-*geoqlparser.SpeedLit
-```
+
 Unit of measurement:
 - Kilometer/hour: Kph
 - Mile/hour: Mph
@@ -198,11 +188,9 @@ tracker_speed in [1kph .. 20kph, 40kph .. 80kph]
 ## Integer
 This data type is used to describe the INTEGER value. 
 The size of the generic int type is platform dependent. It is 32 bits wide on a 32-bit system and 64-bits wide on a 64-bit system.
-```go
-*geoqlparser.IntLit
-```
+
 Example:
-```go
+```text
 some_selector > 100
 1+2 == 3
 h3_idx_selector{*, "786d9e27-f277-4d5d-b658-3198c133c43d"}:1,2 in [1, 2]
@@ -210,9 +198,7 @@ h3_idx_selector{*, "786d9e27-f277-4d5d-b658-3198c133c43d"}:1,2 in [1, 2]
 
 ## Float
 This data type is used to describe the FLOAT value
-```go
-*geoqlparser.FloatLit
-```
+
 Example:
 ```text
 tracker_pid_value >= 33.3455
@@ -221,9 +207,7 @@ tracker_coords intersects point[-74.232423423, 54.455644]
 
 ## String
 This data type is used to describe the STRING value
-```go
-*geoqlparser.StringLit
-```
+
 Example:
 ```text
 tracker_status == "Y" or tracker_status == "Valid"
@@ -232,9 +216,6 @@ tracker_model eq "ER54x3"
 
 ## Duration
 This data type is used to describe the DURATION value
-```go
-*geoqlparser.DurationLit
-```
 
 1h, 20s, 7h3m45s, 7h3m, 3m
 
@@ -252,9 +233,6 @@ tracker_some_select < 7h3m45s
 
 ## Distance
 This data type is used to describe the DISTANCE value
-```go
-*geoqlparser.DistanceLit
-```
 
 Unit of measurement:
  - Kilometers: Km
@@ -269,9 +247,7 @@ tracker_radius in 40Km .. 45Km
 
 ## Temperature
 This data type is used to describe the TEMPERATURE value
-```go
-*geoqlparser.TemperatureLit
-```
+
 Unit of measurement:
 - Celsius: C
 - Fahrenheit: F
@@ -284,9 +260,7 @@ tracker_temperature >= 0C and tracker_temperature < -5C
 
 ## Pressure
 This data type is used to describe the PRESSURE value
-```go
-*geoqlparser.PressureLit
-```
+
 Unit of measurement:
 - Psi
 - Bar
@@ -303,15 +277,6 @@ tracker_some_val < 40Psi
 This data type is used to describe the GEOMETRY POINT value is a single position
 
 Each value represents a float type
-```go
-*geoqlparser.GeometryPointExpr
-
-type GeometryPointExpr struct {
-    Val      [2]float64
-    Radius   *DistanceLit
-    // ...	
-}
-```
 
 Example:
 
@@ -331,10 +296,6 @@ This data type is used to describe the GEOMETRY MULTI POINT values is an array o
 
 Each value represents a float type
 
-```go
-*geoqlparser.GeometryMultiObject
-```
-
 Example:
 
 tracker_coords - selector for longitude and latitude current device
@@ -350,14 +311,7 @@ This data type is used to describe the GEOMETRY LINE values is an array of two o
 more positions
 
 Each value represents a float type
-```go
-*geoqlparser.GeometryLineExpr
 
-type GeometryLineExpr struct {
-    Val      [][2]float64
-	Margin   *DistanceLit
-}
-```
 Example:
 
 tracker_coords - selector for longitude and latitude current device
@@ -367,7 +321,7 @@ tracker_coords intersects line[[38.3203125,60.413852350464914], [69.609374999999
 tracker_coords intersects line[[38.3203125,60.413852350464914], [69.60937499999999,51.6180165487737], [83.3203125,30.751277776257812]]
 ```
 with margin 400 meters
-```go
+```text
 tracker_coords intersects line[[38.3203125,60.413852350464914], [69.60937499999999,51.6180165487737]]:400m
 ```
 
@@ -376,10 +330,6 @@ This data type is used to describe the GEOMETRY MULTI LINE values is an array of
 line coordinate arrays
 
 Each value represents a float type
-
-```go
-*geoqlparser.GeometryMultiObject
-```
 
 Example:
 

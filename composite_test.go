@@ -157,7 +157,7 @@ func TestParseSelector(t *testing.T) {
 								return false
 							}
 							if dist.Val != 1 {
-								err = fmt.Errorf("got 1, expected %f%s",
+								err = fmt.Errorf("got 1, expected %f%ok",
 									dist.Val, dist.U)
 								return false
 							}

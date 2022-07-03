@@ -291,7 +291,7 @@ func assertVars(positions map[string][5]Pos) func(t *Trigger) (err error) {
 			return fmt.Errorf("no variables found")
 		}
 		for id := range vars {
-			assignStmt, err := t.findVar(id)
+			assignStmt, err := t.findAssign(id)
 			if err != nil {
 				return err
 			}
