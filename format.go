@@ -206,9 +206,27 @@ func (e *GeometryCollectionTyp) format(w io.StringWriter, padding string, inline
 }
 
 func (e *Range) format(w io.StringWriter, padding string, inline bool) {
+	switch e.Low.(type) {
+	case *TimeTyp:
+		checkError(w.WriteString("time["))
+		inline = true
+	case *MonthTyp:
+		checkError(w.WriteString("month["))
+		inline = true
+	case *DateTyp:
+		checkError(w.WriteString("date["))
+		inline = true
+	case *WeekdayTyp:
+		checkError(w.WriteString("weekday["))
+		inline = true
+	}
 	e.Low.format(w, padding, inline)
-	checkError(w.WriteString(" ... "))
+	checkError(w.WriteString(" .. "))
 	e.High.format(w, padding, inline)
+	switch e.Low.(type) {
+	case *TimeTyp, *MonthTyp, *DateTyp, *WeekdayTyp:
+		checkError(w.WriteString("]"))
+	}
 }
 
 func (e *PercentTyp) format(w io.StringWriter, _ string, _ bool) {
@@ -314,7 +332,23 @@ func (e *GeometryPointTyp) format(w io.StringWriter, padding string, inline bool
 }
 
 func (e *ArrayTyp) format(b io.StringWriter, padding string, inline bool) {
+	switch e.Kind {
+	case TIME:
+		checkError(b.WriteString("time"))
+		inline = true
+	case MONTH:
+		checkError(b.WriteString("month"))
+		inline = true
+	case DATE:
+		checkError(b.WriteString("date"))
+		inline = true
+	case WEEKDAY:
+		checkError(b.WriteString("weekday"))
+		inline = true
+	}
+
 	checkError(b.WriteString("["))
+
 	for i, expr := range e.List {
 		expr.format(b, padding, inline)
 		if i+1 < len(e.List) {
@@ -419,16 +453,67 @@ func (e *IntTyp) format(w io.StringWriter, _ string, _ bool) {
 	checkError(w.WriteString(strconv.Itoa(e.Val)))
 }
 
-func (e *DateTyp) format(w io.StringWriter, _ string, _ bool) {
+func (e *DateTyp) format(w io.StringWriter, _ string, inline bool) {
+	if !inline {
+		checkError(w.WriteString("date["))
+	}
+	checkError(w.WriteString(d2s(e.Year)))
+	checkError(w.WriteString("-"))
+	checkError(w.WriteString(d2s(e.Month)))
+	checkError(w.WriteString("-"))
+	checkError(w.WriteString(d2s(e.Day)))
+	if !inline {
+		checkError(w.WriteString("]"))
+	}
 }
 
-func (e *TimeTyp) format(w io.StringWriter, _ string, _ bool) {
+func (e *TimeTyp) format(w io.StringWriter, _ string, inline bool) {
+	if !inline {
+		checkError(w.WriteString("time["))
+	}
+	if e.U == AM || e.U == PM {
+		checkError(w.WriteString(strconv.Itoa(e.Hours)))
+	} else {
+		checkError(w.WriteString(d2s(e.Hours)))
+	}
+	checkError(w.WriteString(":"))
+	checkError(w.WriteString(d2s(e.Minutes)))
+	if e.Seconds > 0 {
+		checkError(w.WriteString(":"))
+		checkError(w.WriteString(d2s(e.Seconds)))
+	}
+	if e.U == AM || e.U == PM {
+		checkError(w.WriteString(e.U.String()))
+	}
+	if !inline {
+		checkError(w.WriteString("]"))
+	}
 }
 
-func (e *WeekdayTyp) format(w io.StringWriter, _ string, _ bool) {
-
+func (e *WeekdayTyp) format(w io.StringWriter, _ string, inline bool) {
+	if !inline {
+		checkError(w.WriteString("weekday["))
+	}
+	checkError(w.WriteString(shortDayNames[e.Val]))
+	if !inline {
+		checkError(w.WriteString("]"))
+	}
 }
 
-func (e *MonthTyp) format(w io.StringWriter, _ string, _ bool) {
+func (e *MonthTyp) format(w io.StringWriter, _ string, inline bool) {
+	if !inline {
+		checkError(w.WriteString("month["))
+	}
+	checkError(w.WriteString(shortDayNames[e.Val-1]))
+	if !inline {
+		checkError(w.WriteString("]"))
+	}
+}
 
+func d2s(n int) string {
+	str := strconv.Itoa(n)
+	if n < 10 {
+		return "0" + str
+	}
+	return str
 }

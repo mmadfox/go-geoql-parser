@@ -93,7 +93,7 @@ func (s *parser) parseDateExpr() (expr Expr, err error) {
 				arrayExpr = &ArrayTyp{Kind: DATE, List: make([]Expr, 0)}
 			}
 			arrayExpr.List = append(arrayExpr.List, date)
-		case RANGE:
+		case RANGE, PERIOD:
 			if arrayExpr != nil {
 				return nil, s.error()
 			}
@@ -114,9 +114,6 @@ func (s *parser) parseDateExpr() (expr Expr, err error) {
 				s.next()
 				return arrayExpr, nil
 			case isRangeTyp():
-				if rangeExpr.High != nil && rangeExpr.Low != nil {
-					return nil, s.error()
-				}
 				rangeExpr.High = date
 				rangeExpr.lpos = lpos
 				rangeExpr.rpos = s.t.Offset()
@@ -231,7 +228,7 @@ func (s *parser) parseTimeExpr() (expr Expr, err error) {
 				arrayExpr = &ArrayTyp{Kind: TIME, List: make([]Expr, 0)}
 			}
 			arrayExpr.List = append(arrayExpr.List, time_)
-		case RANGE:
+		case RANGE, PERIOD:
 			if arrayExpr != nil {
 				return nil, s.error()
 			}
@@ -252,9 +249,6 @@ func (s *parser) parseTimeExpr() (expr Expr, err error) {
 				s.next()
 				return arrayExpr, nil
 			case isRangeTyp():
-				if rangeExpr.High != nil && rangeExpr.Low != nil {
-					return nil, s.error()
-				}
 				rangeExpr.High = time_
 				rangeExpr.lpos = lpos
 				rangeExpr.rpos = s.t.Offset()
@@ -320,7 +314,7 @@ func (s *parser) parseWeekdayExpr() (expr Expr, err error) {
 				arrayExpr = &ArrayTyp{Kind: WEEKDAY, List: make([]Expr, 0)}
 			}
 			arrayExpr.List = append(arrayExpr.List, wd)
-		case RANGE:
+		case RANGE, PERIOD:
 			if arrayExpr != nil {
 				return nil, s.error()
 			}
@@ -341,9 +335,6 @@ func (s *parser) parseWeekdayExpr() (expr Expr, err error) {
 				s.next()
 				return arrayExpr, nil
 			case isRangeTyp():
-				if rangeExpr.High != nil && rangeExpr.Low != nil {
-					return nil, s.error()
-				}
 				rangeExpr.High = wd
 				rangeExpr.lpos = lpos
 				rangeExpr.rpos = s.t.Offset()
@@ -419,7 +410,7 @@ func (s *parser) parseMonthExpr() (expr Expr, err error) {
 				arrayExpr = &ArrayTyp{Kind: MONTH, List: make([]Expr, 0)}
 			}
 			arrayExpr.List = append(arrayExpr.List, wd)
-		case RANGE:
+		case RANGE, PERIOD:
 			if arrayExpr != nil {
 				return nil, s.error()
 			}
@@ -440,9 +431,6 @@ func (s *parser) parseMonthExpr() (expr Expr, err error) {
 				s.next()
 				return arrayExpr, nil
 			case isRangeTyp():
-				if rangeExpr.High != nil && rangeExpr.Low != nil {
-					return nil, s.error()
-				}
 				rangeExpr.High = wd
 				rangeExpr.lpos = lpos
 				rangeExpr.rpos = s.t.Offset()
